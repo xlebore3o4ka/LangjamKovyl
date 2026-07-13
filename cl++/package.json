@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check"
+    "lint": "oxlint ./src",
+    "lint:fix": "oxlint --fix ./src",
+    "fmt": "oxfmt ./src",
+    "fmt:check": "oxfmt --check ./src"
   },
   "keywords": [],
   "author": "",
