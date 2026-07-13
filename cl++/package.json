@@ -19,6 +19,7 @@
   "type": "module",
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "esbuild-plugin-copy": "^2.1.1",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2"
   },
