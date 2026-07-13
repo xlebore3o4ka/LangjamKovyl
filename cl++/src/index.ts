@@ -12,8 +12,7 @@ const main = () => {
 
   if (!filePath) exitWithError("Error: path to .clx file not specified");
 
-  if (!fs.existsSync(filePath))
-    exitWithError(`Error: not found file: ${filePath}`);
+  if (!fs.existsSync(filePath)) exitWithError(`Error: not found file: ${filePath}`);
 
   try {
     const sourceCode = fs.readFileSync(filePath, "utf-8");
