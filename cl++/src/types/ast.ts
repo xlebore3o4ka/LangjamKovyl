@@ -14,6 +14,7 @@ export interface Program {
 export interface FunctionDeclaration {
   type: "FunctionDeclaration";
   name: Identifier;
+  params: Identifier[];
   body: Statement[];
 }
 

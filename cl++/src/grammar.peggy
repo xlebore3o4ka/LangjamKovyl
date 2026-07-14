@@ -6,10 +6,11 @@ Program
     }
 
 FunctionDeclaration
-    = "fn" _ name:Identifier _ "()" _ "{" _ body:Statement* _ "}" {
+    = "fn" _ name:Identifier _ "(" _ params:ParameterList _ ")" _ "{" _ body:Statement* _ "}" {
         return {
             type: "FunctionDeclaration",
             name: name,
+            params: params,
             body: body
         }
     }
@@ -48,6 +49,11 @@ CallExpression
 
 ArgumentList
     = first:Expression rest:(_ "," _ Expression)* {
+        return [first, ...rest.map(r => r[3])]
+    } / _ {return []}
+
+ParameterList
+    = first:Identifier rest:(_ "," _ Identifier)* {
         return [first, ...rest.map(r => r[3])]
     } / _ {return []}
 
