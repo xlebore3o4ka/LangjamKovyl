@@ -5,6 +5,7 @@ import exitWithError from "./utils/exitWithError.js";
 import { fileURLToPath } from "url";
 import type { ASTNode } from "./types/ast.js";
 import { SemanticAnalyzer } from "./semantic.js";
+import generate from "./codegen.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,9 +31,12 @@ const main = () => {
     const analyzer = new SemanticAnalyzer();
     analyzer.analyze(ast);
 
+    const code = generate(ast);
+
     console.log(JSON.stringify(ast, null, 2));
 
     console.log(sourceCode);
+    console.log(code);
   } catch (error: unknown) {
     exitWithError(`Error: fail to read file: ${filePath}`, error);
   }
