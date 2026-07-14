@@ -9,7 +9,7 @@ FunctionDeclaration
     = "fn" _ name:Identifier _ "()" _ "{" _ body:Statement* _ "}" {
         return {
             type: "FunctionDeclaration",
-            name: name.name,
+            name: name,
             body: body
         }
     }
@@ -21,7 +21,7 @@ VariableDeclaration
  = "var" _ name:Identifier _ "=" _ value:Expression _ {
     return {
             type: "VariableDeclaration",
-            name: name.name,
+            name: name,
             value: value
         }
     }
