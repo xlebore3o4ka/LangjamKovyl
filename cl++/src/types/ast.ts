@@ -6,6 +6,8 @@ export type PrimaryExpression = StringLiteral | Identifier;
 
 export type Expression = PrimaryExpression | MemberExpression | CallExpression;
 
+export type SymbokKind = "variable" | "parameter" | "function" | "builtin";
+
 export interface Program {
   type: "Program";
   body: FunctionDeclaration[];
@@ -49,4 +51,5 @@ export interface StringLiteral {
 export interface Identifier {
   type: "Identifier";
   name: string;
+  symbolKind?: Sy;
 }
