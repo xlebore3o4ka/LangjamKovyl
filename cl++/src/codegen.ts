@@ -16,6 +16,30 @@ const generate = (node: ASTNode): string => {
       const stmts = node.body.map(generate).join(",\n    ");
       return `${funcName}() ->\n    ${stmts}.`;
 
+    case "BinaryExpression":
+      const left = generate(node.left);
+      const right = generate(node.right);
+      const operator = node.operator === "~=" ? "/=" : node.operator;
+
+      return `${left} ${operator} ${right}`;
+
+    case "IfStatement":
+      const condition = generate(node.condition);
+      const consStr = node.consequent.map(generate).join(",\n    ");
+      const consequent = consStr.length > 0 ? consStr : "ok";
+
+      let alternate = "";
+      if (node.alternate) {
+        if (Array.isArray(node.alternate)) {
+          const altStr = node.alternate.map(generate).join(",\n    ");
+          alternate = altStr.length > 0 ? altStr : "ok";
+        } else {
+          alternate = generate(node.alternate);
+        }
+      }
+
+      return `case clx_std:to_boolean(${condition}) of\n    true -> \n        ${consequent}\n    _ ->\n        ${alternate}\nend`;
+
     case "VariableDeclaration":
       const varName = capitalize(node.name.name);
       return `${varName} = ${generate(node.value)}`;

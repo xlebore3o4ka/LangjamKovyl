@@ -1,4 +1,3 @@
 fn start() {
-    var text = "hello, world!"
-    io.print(text)
+    io.print("Hello, world!")
 }

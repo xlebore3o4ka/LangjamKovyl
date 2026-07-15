@@ -16,7 +16,40 @@ FunctionDeclaration
     }
 
 Statement
-    = VariableDeclaration / ExpressionStatement
+    = IfStatement / VariableDeclaration / ExpressionStatement
+
+IfStatement
+    = "if" _ "(" _ cond:Expression _ ")" _ "{" _ cons:Statement* _ "}"
+    alt:(_ "else" _ (IfStatement / "{" _ Statement* _ "}")) {
+        let alternateNode = undefined
+        if (alt) {
+            const actualAlt = alt[3]
+            if (Array.isArray(actualAlt)) {
+                alternateNode = actualAlt[2]
+            } else {
+                alternateNode = actualAlt
+            }
+        }
+        return {
+            type: "IfStatement",
+            condition: cond,
+            consequent: cons,
+            alternate: alternateNode
+        }
+    }
+
+BinaryExpression
+    = left:(CallExpression / MemberExpression / PrimaryExpression) _ op:CompareOperator _ right:Expression {
+        return {
+            type: "BinaryExpression",
+            left: left,
+            operator: op,
+            right: right
+        }
+    }
+
+CompareOperator
+    = "==" / "~=" / "<" / ">" / "<=" / ">="
 
 VariableDeclaration
  = "var" _ name:Identifier _ "=" _ value:Expression _ {
@@ -36,7 +69,7 @@ ExpressionStatement
     }
 
 Expression
-    = CallExpression / MemberExpression / PrimaryExpression
+    = BinaryExpression / CallExpression / MemberExpression / PrimaryExpression
 
 CallExpression
     = callee:(MemberExpression / PrimaryExpression) _ "(" _ args:ArgumentList _ ")" {

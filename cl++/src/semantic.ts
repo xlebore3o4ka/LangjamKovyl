@@ -15,7 +15,8 @@ class Scope {
   }
 
   public define(name: string, kind: SymbokKind): void {
-    if (this.symbols.has(name)) exitWithError(`Identifier ${name} is already defined`);
+    if (this.symbols.has(name))
+      exitWithError(`Identifier ${name} is already defined`);
     this.symbols.set(name, { name, kind });
   }
 
@@ -64,6 +65,32 @@ class SemanticAnalyzer {
 
       case "ExpressionStatement":
         this.analyze(node.expression);
+        break;
+
+      case "BinaryExpression":
+        this.analyze(node.left);
+        this.analyze(node.right);
+        break;
+
+      case "IfStatement":
+        this.analyze(node.condition);
+
+        const previousScopeIf = this.currentScope;
+        this.currentScope = new Scope(this.currentScope);
+        for (const stmt of node.consequent) this.analyze(stmt);
+        this.currentScope = previousScopeIf;
+
+        if (!node.alternate) break;
+
+        if (Array.isArray(node.alternate)) {
+          const previousScopeElse = this.currentScope;
+          this.currentScope = new Scope(this.currentScope);
+          for (const stmt of node.alternate) this.analyze(stmt);
+          this.currentScope = previousScopeElse;
+        } else {
+          this.analyze(node.alternate);
+        }
+
         break;
 
       case "CallExpression":
