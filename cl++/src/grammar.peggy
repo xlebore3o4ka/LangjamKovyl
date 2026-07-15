@@ -15,6 +15,28 @@ FunctionDeclaration
         }
     }
 
+BooleanLiteral
+    = "true" {
+        return {
+            type: "BooleanLiteral",
+            value: true
+        }
+    }
+    / "false" {
+        return {
+            type: "BooleanLiteral",
+            value: false
+        }
+    }
+
+NumberLiteral
+    = [0-9]+ ("." [0-9]+)? {
+        return {
+            type: "NumberLiteral",
+            value: parseFloat(text)
+        }
+    }
+
 Statement
     = IfStatement / WhileStatement / VariableDeclaration / ExpressionStatement
 

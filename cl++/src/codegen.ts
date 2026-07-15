@@ -37,6 +37,12 @@ const generate = (node: ASTNode): string => {
         end
     end)()`;
 
+    case "BooleanLiteral":
+      return node.value ? "true" : "false";
+
+    case "NumberLiteral":
+      return node.value.toString();
+
     case "IfStatement":
       const condition = generate(node.condition);
       const consStr = node.consequent.map(generate).join(",\n    ");

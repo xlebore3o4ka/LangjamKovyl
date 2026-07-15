@@ -117,7 +117,9 @@ class SemanticAnalyzer {
         node.symbolKind = symbol.kind;
         break;
 
+      case "BooleanLiteral":
       case "StringLiteral":
+      case "NumberLiteral":
         break;
     }
   }

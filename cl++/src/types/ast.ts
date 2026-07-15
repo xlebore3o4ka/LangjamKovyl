@@ -3,7 +3,8 @@ export type ASTNode = Program | FunctionDeclaration | Statement | Expression;
 export type Statement =
   ExpressionStatement | VariableDeclaration | IfStatement | WhileStatement;
 
-export type PrimaryExpression = StringLiteral | Identifier;
+export type PrimaryExpression =
+  StringLiteral | Identifier | BooleanLiteral | NumberLiteral;
 
 export type Expression =
   PrimaryExpression | MemberExpression | CallExpression | BinaryExpression;
@@ -68,6 +69,16 @@ export interface MemberExpression {
 export interface StringLiteral {
   type: "StringLiteral";
   value: string;
+}
+
+export interface BooleanLiteral {
+  type: "BooleanLiteral";
+  value: boolean;
+}
+
+export interface NumberLiteral {
+  type: "NumberLiteral";
+  value: number;
 }
 
 export interface Identifier {
