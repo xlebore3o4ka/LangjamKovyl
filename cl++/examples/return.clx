@@ -1,0 +1,21 @@
+fn start() {
+    var a = 100
+    var b = 300
+    io.print(add(a,b))
+
+    var age = 12
+    io.print(approve(age))
+}
+
+fn add(a, b) {
+    return a + b
+}
+
+
+fn approve(age) {
+    if (age > 18) {
+        return "You approved!"
+    } else {
+        return "Go away!"
+    }
+}
