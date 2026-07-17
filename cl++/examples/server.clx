@@ -1,0 +1,12 @@
+pub fn start() {
+    while (true) {
+        var socket = element(2, gen_tcp.listen(8080, []))
+
+        var client = element(2, gen_tcp.accept(socket))
+
+        gen_tcp.send(client, list_to_binary("Hello, World!\n"))
+
+        gen_tcp.close(client)
+        gen_tcp.close(socket)
+    }
+}
