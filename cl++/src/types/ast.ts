@@ -9,7 +9,7 @@ export type Statement =
   | ImportDeclaration;
 
 export type PrimaryExpression =
-  StringLiteral | Identifier | BooleanLiteral | NumberLiteral | ArrayExpression;
+  StringLiteral | AtomLiteral | Identifier | BooleanLiteral | NumberLiteral | ArrayExpression;
 
 export type Expression =
   | PrimaryExpression
@@ -58,6 +58,11 @@ export interface BinaryExpression {
   left: Expression;
   operator: "==" | "~=" | "<" | ">" | "<=" | ">=" | "+" | "-" | "++";
   right: Expression;
+}
+
+export interface AtomLiteral {
+  type: "AtomLiteral",
+  value: string
 }
 
 export interface FunctionDeclaration {

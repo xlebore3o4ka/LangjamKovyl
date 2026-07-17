@@ -218,6 +218,14 @@ StringLiteral
         }
     }
 
+AtomLiteral
+    = ":" name:([a-zA-Z_][a-zA-Z0-9_]*) {
+        return {
+            type: "AtomLiteral",
+            value: name[0] + name[1].join("")
+        }
+    }
+
 Identifier
     = chars:[a-zA-Z_][a-zA-Z0-9_]* {
         return {

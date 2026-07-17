@@ -32,6 +32,9 @@ const generate = (node: ASTNode, moduleName: string = "main"): string => {
 
       return `${funcName}(${params}) ->\n    try\n        ${funcBody}\n    catch\n        throw:{'__clx_return', ReturnValue} -> \n        ReturnValue\n    end.`;
 
+    case "AtomLiteral":
+      return `${node.value}`
+
     case "ReturnStatement":
       const arg = generate(node.argument);
       return `throw({'__clx_return', ${arg}})`;
