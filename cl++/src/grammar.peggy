@@ -279,4 +279,4 @@ Identifier
     }
 
 _ "whitespace"
-    = [ \t\n\r]*
+    = ( [ \t\n\r] / "#" [^\n\r]* )*
