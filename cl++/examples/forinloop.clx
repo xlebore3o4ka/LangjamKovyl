@@ -1,0 +1,5 @@
+pub fn start() {
+    for (i in lists.seq(1, 10)) {
+        io.print(i)
+    }
+}
