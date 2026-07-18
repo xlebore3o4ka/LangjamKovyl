@@ -1,0 +1,7 @@
+pub fn start() {
+    var num = 123
+
+    if (num > 100 and num < 130) {
+        print(num)
+    }
+}
