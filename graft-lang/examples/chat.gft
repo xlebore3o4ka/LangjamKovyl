@@ -1,0 +1,132 @@
+use std.io
+use std.list
+
+actor ChatRoom {
+    msg init() {
+        state.names = []
+        state.sockets = map.new()
+        state.messages = []
+    }
+
+    msg join(name, sock) {
+        state.names = list.push(state.names, name)
+        state.sockets = map.put(state.sockets, name, sock)
+        state.messages = list.push(state.messages, [name, name ++ " joined the chat", time.now()])
+        for user in state.names {
+            net.send(map.get(state.sockets, user), "[+] " ++ name ++ " joined\n")
+        }
+    }
+
+    msg send(name, text) {
+        state.messages = list.push(state.messages, [name, text, time.now()])
+        for user in state.names {
+            net.send(map.get(state.sockets, user), name ++ ": " ++ text ++ "\n")
+        }
+    }
+
+    msg leave(name) {
+        state.names = list.remove(state.names, name)
+        state.sockets = map.remove(state.sockets, name)
+        state.messages = list.push(state.messages, [name, name ++ " left the chat", time.now()])
+        for user in state.names {
+            net.send(map.get(state.sockets, user), "[-] " ++ name ++ " left\n")
+        }
+    }
+
+    msg kick(name, target) {
+        state.names = list.remove(state.names, target)
+        state.sockets = map.remove(state.sockets, target)
+        state.messages = list.push(state.messages, [name, target ++ " was kicked by " ++ name, time.now()])
+        for user in state.names {
+            net.send(map.get(state.sockets, user), "[!] " ++ target ++ " was kicked by " ++ name ++ "\n")
+        }
+    }
+
+    msg history(n) {
+        return list.last(state.messages, n)
+    }
+
+    msg userCount() {
+        return list.len(state.names)
+    }
+
+    msg users() {
+        return state.names
+    }
+
+    msg clear() {
+        state.messages = []
+    }
+}
+
+fn handleClient(room, sock) {
+    net.send(sock, "Enter your name: ")
+    let name = net.recv(sock)
+
+    if name == "" {
+        net.close(sock)
+        return
+    }
+
+    room.join(name, sock)
+
+    let count = room.userCount()
+    let countStr = string.from_int(count)
+    net.send(sock, "Welcome, " ++ name ++ "! " ++ countStr ++ " user(s) online\n")
+
+    while true {
+        let line = net.recv(sock)
+
+        if line == "" {
+            room.leave(name)
+            net.close(sock)
+            break
+        } else {
+            match line {
+                case "/quit" {
+                    room.leave(name)
+                    net.send(sock, "Goodbye!\n")
+                    net.close(sock)
+                    break
+                }
+                case "/help" {
+                    net.send(sock, "Commands: /users, /history, /clear, /kick <name>, /quit\n")
+                }
+                case "/users" {
+                    let u = room.users()
+                    net.send(sock, "Online: " ++ list.join(u, ", ") ++ "\n")
+                }
+                case "/history" {
+                    let msgs = room.history(20)
+                    net.send(sock, "--- recent messages ---\n")
+                    for m in msgs {
+                        net.send(sock, m[0] ++ ": " ++ m[1] ++ "\n")
+                    }
+                }
+                case "/clear" {
+                    room.clear()
+                    net.send(sock, "History cleared.\n")
+                }
+                case _ {
+                    room.send(name, line)
+                }
+            }
+        }
+    }
+}
+
+fn main() {
+    let room = ChatRoom.spawn()
+    room.init()
+
+    let sock = net.listen(4000)
+    io.println("Chat server started on port 4000")
+    io.println("Use <telnet localhost 4000> command to join")
+
+    while true {
+        let client = net.accept(sock)
+        process.spawn(fn() {
+            handleClient(room, client)
+        })
+    }
+}

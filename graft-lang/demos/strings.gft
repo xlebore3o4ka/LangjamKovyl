@@ -1,0 +1,8 @@
+use std.io
+
+fn main() {
+    let greeting = "Hello"
+    let name = "World"
+    let text = greeting ++ ", " ++ name ++ "!"
+    io.println(text)
+}

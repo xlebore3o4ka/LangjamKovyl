@@ -1,0 +1,12 @@
+# binaries
+/graftc
+
+# erlang files
+*.erl
+*.beam
+*.app
+*.avm
+*.dump 
+
+# editor
+.vscode/

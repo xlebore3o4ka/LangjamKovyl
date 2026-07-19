@@ -1,0 +1,6 @@
+use std.io
+
+fn main() {
+    let x = 10 mod 3
+    io.println(x)
+}

@@ -1,0 +1,19 @@
+use std.io
+
+fn classify(n) {
+    if n < 0 {
+        return "negative"
+    } else {
+        if n == 0 {
+            return "zero"
+        } else {
+            return "positive"
+        }
+    }
+}
+
+fn main() {
+    io.println(classify(-5))
+    io.println(classify(0))
+    io.println(classify(7))
+}

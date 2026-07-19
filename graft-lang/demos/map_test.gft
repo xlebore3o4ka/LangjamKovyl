@@ -1,0 +1,10 @@
+use std.io
+
+fn main() {
+    let m = {"name": "Alice", "role": "admin"}
+    let name = m["name"]
+    let role = m["role"]
+    io.print(name)
+    io.print(" is ")
+    io.println(role)
+}

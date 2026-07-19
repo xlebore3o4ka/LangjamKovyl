@@ -1,0 +1,11 @@
+use std.io
+
+struct Point {
+    x, y
+}
+
+fn main() {
+    let p = Point.new(3, 4)
+    io.println(p.x)
+    io.println(p.y)
+}

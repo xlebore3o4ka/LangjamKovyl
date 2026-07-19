@@ -1,0 +1,13 @@
+use std.io
+
+fn main() {
+    mut i = 0
+    while i < 10 {
+        if i == 5 {
+            break
+        }
+        io.println(i)
+        i = i + 1
+    }
+    io.println("done")
+}

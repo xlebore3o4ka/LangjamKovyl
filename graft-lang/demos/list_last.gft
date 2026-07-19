@@ -1,0 +1,8 @@
+use std.io
+use std.list
+
+fn main() {
+    let items = [10, 20, 30, 40, 50]
+    let last2 = list.last(items, 2)
+    io.println(last2)
+}

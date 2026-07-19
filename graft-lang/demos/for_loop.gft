@@ -1,0 +1,8 @@
+use std.io
+
+fn main() {
+    let items = [10, 20, 30]
+    for item in items {
+        io.println(item)
+    }
+}

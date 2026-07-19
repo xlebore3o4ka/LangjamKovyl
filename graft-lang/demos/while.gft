@@ -1,0 +1,9 @@
+use std.io
+
+fn main() {
+    mut i = 0
+    while i < 5 {
+        io.println(i)
+        i = i + 1
+    }
+}
