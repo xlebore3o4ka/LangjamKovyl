@@ -1,8 +1,7 @@
-pub fn db () {
+pub fn db() {
     var options = [:binary, (:packet, 0), (:active, :false)]
     var ip = "127.0.0.1"
     var port = 6379
-
     var response = gen_tcp.connect(ip, port, options)
 
     return response[2]

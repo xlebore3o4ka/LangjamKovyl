@@ -5,22 +5,24 @@
 
 
 
+
+
 auth(Client,Db) ->
     try
         clear_screen:clear_screen(Client),
-    gen_tcp:send(Client, unicode:characters_to_binary("Приветствуем в нашем NetChat!\n1 - ввойти в аккаунт\n2 - создать аккаунт\n")),
-    Input = clear_input:clear_input(Client),
+    gen_tcp:send(Client, unicode:characters_to_binary("Приветствуем в нашем NetChat!\n1 - ввойти в аккаунт\n2 - создать аккаунт\n:")),
+    Command = receive_input:receive_input(),
     clear_screen:clear_screen(Client),
-    case clx_std:to_boolean(Input == "1") of
+    case clx_std:to_boolean(Command == "1") of
     true -> 
         throw({'__clx_return', handle_login(Client, Db)});
     _ ->
-        case clx_std:to_boolean(Input == "2") of
+        case clx_std:to_boolean(Command == "2") of
     true -> 
         throw({'__clx_return', handle_reg(Client, Db)});
     _ ->
         clear_screen:clear_screen(Client),
-    gen_tcp:send(Client, unicode:characters_to_binary("Введена неправильная команда. Попробуйте ещё раз!")),
+    gen_tcp:send(Client, unicode:characters_to_binary("\nВведена неправильная команда. Попробуйте ещё раз!")),
     timer:sleep(2000),
     throw({'__clx_return', auth(Client, Db)})
 end
@@ -44,16 +46,15 @@ handle_login(Client,Db) ->
     throw({'__clx_return', auth(Client, Db)});
     _ ->
         Real_password = string:split(Answer, "\r\n", all),
-    erlang:display(clx_std:get_element(Real_password, 2)),
-    erlang:display(clx_std:get_element(Data, 2)),
     clear_screen:clear_screen(Client),
     case clx_std:to_boolean(clx_std:get_element(Data, 2) == clx_std:get_element(Real_password, 2)) of
     true -> 
-        gen_tcp:send(Client, unicode:characters_to_binary("Вы успешно вошли!")),
+        gen_tcp:send(Client, unicode:characters_to_binary("\nВы успешно вошли!")),
     timer:sleep(2000),
-    throw({'__clx_return', clx_std:get_element(Data, 1)});
+    register(list_to_atom(clx_std:get_element(Data, 1)), self()),
+    throw({'__clx_return', menu:menu(Client, Db, clx_std:get_element(Data, 1))});
     _ ->
-        gen_tcp:send(Client, unicode:characters_to_binary("Пароль не верный!")),
+        gen_tcp:send(Client, unicode:characters_to_binary("\nПароль не верный!")),
     timer:sleep(2000),
     throw({'__clx_return', auth(Client, Db)})
 end
@@ -75,11 +76,12 @@ handle_reg(Client,Db) ->
         Set = "SET account:" ++ clx_std:get_element(Data, 1) ++ " " ++ clx_std:get_element(Data, 2) ++ "\r\n",
     gen_tcp:send(Db, unicode:characters_to_binary(Set)),
     gen_tcp:recv(Db, 0),
-    gen_tcp:send(Client, unicode:characters_to_binary("Успешная регистрация!\n")),
+    gen_tcp:send(Client, unicode:characters_to_binary("\nУспешная регистрация!\n")),
     timer:sleep(2000),
-    throw({'__clx_return', clx_std:get_element(Data, 1)});
+    register(list_to_atom(clx_std:get_element(Data, 1)), self()),
+    throw({'__clx_return', menu:menu(Client, Db, clx_std:get_element(Data, 1))});
     _ ->
-        gen_tcp:send(Client, unicode:characters_to_binary("Ошибка, ник уже занят!\n")),
+        gen_tcp:send(Client, unicode:characters_to_binary("\nОшибка, ник уже занят!\n")),
     timer:sleep(2000),
     clear_screen:clear_screen(Client),
     throw({'__clx_return', auth(Client, Db)})
@@ -92,9 +94,9 @@ end
 form(Client) ->
     try
         gen_tcp:send(Client, unicode:characters_to_binary("Введите имя пользователя: ")),
-    Username = clear_input:clear_input(Client),
+    Username = receive_input:receive_input(),
     gen_tcp:send(Client, unicode:characters_to_binary("\nВведите ваш пароль: ")),
-    Password = clear_input:clear_input(Client),
+    Password = receive_input:receive_input(),
     throw({'__clx_return', [Username, Password]})
     catch
         throw:{'__clx_return', ReturnValue} -> 

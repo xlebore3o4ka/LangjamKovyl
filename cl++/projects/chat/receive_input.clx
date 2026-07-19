@@ -1,0 +1,15 @@
+import "clean_input"
+
+pub fn receive_input() {
+    return fn() {
+        receive {
+            (:tcp, _client, data) -> {
+                return clean_input.clean_input(data)
+            }
+
+            (:tcp_closed, _client) -> {
+                return exit(:normal)
+            }
+        }
+    }()
+}

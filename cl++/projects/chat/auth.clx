@@ -1,27 +1,30 @@
-import "clear_input"
+import "receive_input"
 import "clear_screen"
+import "menu"
 
 pub fn auth(client, db) {
     clear_screen.clear_screen(client)
 
-    gen_tcp.send(client, unicode.characters_to_binary("Приветствуем в нашем NetChat!\n1 - ввойти в аккаунт\n2 - создать аккаунт\n"))
+    gen_tcp.send(client, unicode.characters_to_binary("Приветствуем в нашем NetChat!\n1 - ввойти в аккаунт\n2 - создать аккаунт\n:"))
 
-    var input = clear_input.clear_input(client)
+
+    var command = receive_input.receive_input()
 
     clear_screen.clear_screen(client)
 
-    if (input == "1") {
+    if (command == "1") {
         return handle_login(client, db)
-    } else if (input == "2") {
+    } else if (command == "2") {
         return handle_reg(client, db)
     } else {
         clear_screen.clear_screen(client)
 
-        gen_tcp.send(client, unicode.characters_to_binary("Введена неправильная команда. Попробуйте ещё раз!"))
+        gen_tcp.send(client, unicode.characters_to_binary("\nВведена неправильная команда. Попробуйте ещё раз!"))
         timer.sleep(2000)
 
         return auth(client, db)
     }
+
 }
 
 fn handle_login(client, db) {
@@ -40,16 +43,15 @@ fn handle_login(client, db) {
     } else {
         var real_password = string.split(answer, "\r\n", :all)
 
-        erlang.display(real_password[2])
-        erlang.display(data[2])
-
         clear_screen.clear_screen(client)
         if (data[2] == real_password[2]) {
-            gen_tcp.send(client, unicode.characters_to_binary("Вы успешно вошли!"))
+            gen_tcp.send(client, unicode.characters_to_binary("\nВы успешно вошли!"))
             timer.sleep(2000)
-            return data[1]
+
+            register(list_to_atom(data[1]), self())
+            return menu.menu(client, db, data[1])
         } else {
-            gen_tcp.send(client, unicode.characters_to_binary("Пароль не верный!"))
+            gen_tcp.send(client, unicode.characters_to_binary("\nПароль не верный!"))
             timer.sleep(2000)
             return auth(client, db)
         }
@@ -72,24 +74,26 @@ fn handle_reg(client, db) {
         gen_tcp.send(db, unicode.characters_to_binary(set))
         gen_tcp.recv(db, 0)
 
-        gen_tcp.send(client, unicode.characters_to_binary("Успешная регистрация!\n"))
+        gen_tcp.send(client, unicode.characters_to_binary("\nУспешная регистрация!\n"))
         timer.sleep(2000)
 
-        return data[1]
+        register(list_to_atom(data[1]), self())
+        return menu.menu(client, db, data[1])
     } else {
-        gen_tcp.send(client, unicode.characters_to_binary("Ошибка, ник уже занят!\n"))
+        gen_tcp.send(client, unicode.characters_to_binary("\nОшибка, ник уже занят!\n"))
         timer.sleep(2000)
         clear_screen.clear_screen(client)
         return auth(client, db)
     }
 }
 
-fn form (client) {
+fn form(client) {
+
     gen_tcp.send(client, unicode.characters_to_binary("Введите имя пользователя: "))
-    var username = clear_input.clear_input(client)
+    var username = receive_input.receive_input()
 
     gen_tcp.send(client, unicode.characters_to_binary("\nВведите ваш пароль: "))
-    var password = clear_input.clear_input(client)
+    var password = receive_input.receive_input()
 
     return [username, password]
 }

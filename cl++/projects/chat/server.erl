@@ -4,7 +4,7 @@
 server() ->
     try
         Port = 8080,
-    Options = [binary, {packet, 0}, {active, false}, {reuseaddr, true}],
+    Options = [binary, {packet, 0}, {active, true}, {reuseaddr, true}],
     Listen_response = gen_tcp:listen(Port, Options),
     Socket = clx_std:get_element(Listen_response, 2),
     clx_std:print("Server start on port " ++ integer_to_list(Port)),

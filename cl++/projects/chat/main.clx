@@ -2,22 +2,28 @@ import "server"
 import "clear_screen"
 import "db"
 import "auth"
+import "menu"
 
 pub fn start() {
-    var db = db.db()
 
-    var serv = server.server()
+    var server = server.server()
 
-    var accept_response = gen_tcp.accept(serv)
-    var client = accept_response[2]
+    return accpet_loop(server)
+}
 
-    clear_screen.clear_screen(client)
+fn accpet_loop(server) {
 
-    while (true) {
-        auth.auth(client, db)
+    var response = gen_tcp.accept(server)
+    var client = response[2]
+
+    if (response[1] == :ok) {
+        var worker = spawn(fn() {
+            var db = db.db()
+            return auth.auth(client, db)
+        })
+
+        gen_tcp.controlling_process(client, worker)
     }
 
-#   gen_tcp.close(client)
-#   gen_tcp.close(serv)
-#   gen_tcp.close(db)
+    return accpet_loop(server)
 }

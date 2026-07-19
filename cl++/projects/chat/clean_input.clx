@@ -1,0 +1,13 @@
+pub fn clean_input(input) {
+    var bytes_size = byte_size(input) - 1
+
+    if (bytes_size <= 0) {
+        return ""
+    }
+
+    var cleaned_data = binary_part(input, 0, bytes_size)
+    var parsed_data = unicode.characters_to_list(cleaned_data)
+    var trimmed_data = string.trim(parsed_data)
+
+    return trimmed_data
+}

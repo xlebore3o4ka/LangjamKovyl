@@ -1,0 +1,96 @@
+import "clear_screen"
+import "clean_input"
+import "menu"
+
+pub fn chat_room(client, db, my_nick, target_nick) {
+    clear_screen.clear_screen(client)
+    gen_tcp.send(client, unicode.characters_to_binary("\n--- Чат с " ++ target_nick ++ " ---\n(Введи /exit для выхода)\n\n"))
+
+    return chat_receive_loop(client, db, my_nick, target_nick)
+}
+
+fn chat_receive_loop(client, db, my_nick, target_nick) {
+    receive {
+        (:tcp, client, data) -> {
+            var text = clean_input.clean_input(data)
+
+            if (text == "/exit") {
+                return menu.menu(client, db, my_nick)
+            }
+
+            if (text == "") {
+                return chat_receive_loop(client, db, my_nick, target_nick)
+            }
+
+            var time_str = get_formatted_time()
+            var formatted_msg = "[" ++ time_str ++ "] " ++ my_nick ++ ": " ++ text
+
+            save_messages_to_db(db, my_nick, target_nick, formatted_msg)
+
+            var target_atom = list_to_atom(target_nick)
+            var target_pid = whereis(target_atom)
+
+            if (target_pid ~= :undefined) {
+                erlang.send(target_pid, (:chat_msg, formatted_msg))
+            }
+
+            gen_tcp.send(client, unicode.characters_to_binary("\e[1A\e[2K\r" ++ formatted_msg ++ "\n"))
+
+            return chat_receive_loop(client, db, my_nick, target_nick)
+        }
+
+        (:chat_msg, incoming_text) -> {
+            gen_tcp.send(client, unicode.characters_to_binary(incoming_text ++ "\n"))
+            return chat_receive_loop(client, db, my_nick, target_nick)
+        }
+
+        (:tcp_closed, _client) -> {
+            return exit(:normal)
+        }
+    }
+}
+
+fn get_formatted_time() {
+    var seconds = erlang.system_time(:second)
+
+    var datetime = calendar.system_time_to_universal_time(seconds, :second)
+    var time_tuple = datetime[2]
+
+    var hours = integer_to_list(time_tuple[1])
+    var raw_minutes = integer_to_list(time_tuple[2])
+    var minutes = fn() {
+        if (time_tuple[2] < 10) {
+            return "0" ++ raw_minutes
+        } else {
+            return raw_minutes
+        }
+    }()
+
+    return hours ++ ":" ++ minutes
+}
+
+fn get_private_key(user_a, user_b) {
+    if (user_a < user_b) {
+        return "chat:private:" ++ user_a ++ ":" ++ user_b
+    } else {
+        return "chat:private:" ++ user_b ++ ":" ++ user_a
+    }
+}
+
+fn save_messages_to_db(db, from_user, to_user, formatted_msg) {
+    var chat_key = get_private_key(from_user, to_user)
+
+    var rpush = "RPUSH " ++ chat_key ++ " " ++ [34] ++ formatted_msg ++ [34] ++ "\r\n"
+    gen_tcp.send(db, unicode.characters_to_binary(rpush))
+    gen_tcp.recv(db, 0)
+
+    var sadd_from = "SADD user_chats:" ++ from_user ++ " " ++ to_user ++ "\r\n"
+    gen_tcp.send(db, unicode.characters_to_binary(sadd_from))
+    gen_tcp.recv(db, 0)
+
+    var sadd_to = "SADD user_chats:" ++ to_user ++ " " ++ from_user ++ "\r\n"
+    gen_tcp.send(db, unicode.characters_to_binary(sadd_to))
+    gen_tcp.recv(db, 0)
+
+    return :ok
+}

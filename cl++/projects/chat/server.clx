@@ -1,6 +1,6 @@
 pub fn server() {
     var port = 8080
-    var options = [:binary, (:packet, 0), (:active, :false), (:reuseaddr, :true)]
+    var options = [:binary, (:packet, 0), (:active, :true), (:reuseaddr, :true)]
 
     var listen_response = gen_tcp.listen(port, options)
     var socket = listen_response[2]
