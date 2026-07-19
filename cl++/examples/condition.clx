@@ -2,10 +2,10 @@ fn start() {
     var role = "admin"
 
     if (role == "admin") {
-        io.print("Hello, admin!")
+        print("Hello, admin!")
     } else if (role == "user") {
-        io.print("Hello, user!")
+        print("Hello, user!")
     } else {
-        io.print("Hello, unknown!")
+        print("Hello, unknown!")
     }
 }

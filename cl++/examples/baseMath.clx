@@ -3,5 +3,5 @@ fn start() {
     var b = 15
     var c = 5
 
-    io.print(a + b - c)
+    print(a + b - c)
 }

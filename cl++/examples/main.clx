@@ -3,5 +3,5 @@ import "math"
 pub fn start() {
     var result = math.add(5, 3)
 
-    io.print(result)
+    print(result)
 }

@@ -2,5 +2,5 @@ fn start() {
     var strOne = "Hello,"
     var strTwo = " World!"
 
-    io.print(strOne ++ strTwo)
+    print(strOne ++ strTwo)
 }

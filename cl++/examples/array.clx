@@ -1,6 +1,6 @@
 fn start() {
     var list = ["Hello", ",", "World", "!"]
 
-    io.print(list)
-    io.print(list[1])
+    print(list)
+    print(list[1])
 }

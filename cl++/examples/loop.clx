@@ -1,5 +1,5 @@
 fn start() {
     while (true) {
-        io.print("Hello, World!")
+        print("Hello, World!")
     }
 }
