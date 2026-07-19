@@ -311,7 +311,7 @@ TupleExpression
     }
 
 ReceiveExpression
-    = "receive" _ "{" _ cases:(ReceiveCase)* _ "}" {
+    = "receive" _ "{" _ cases:(c:ReceiveCase _ { return c })* "}" {
         return {
             type: "ReceiveExpression",
             cases: cases
