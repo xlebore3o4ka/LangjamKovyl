@@ -7,7 +7,7 @@
 ```bash
 lake build
 
-./.lake/build/bin/ftorlisp ./examples/main.ftl \                                                ✔ 
+./.lake/build/bin/ftorlisp ./examples/main.ftl \
   --stdlib ./Stdlib/stdlib.ftl \
   --module main \
   -o main.erl
