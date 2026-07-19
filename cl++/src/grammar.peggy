@@ -244,7 +244,7 @@ ParameterList
     } / _ {return []}
 
 PrimaryExpression
-    = AnonymousFunctionExpression / BooleanLiteral / NumberLiteral / StringLiteral / AtomLiteral / Identifier / ArrayExpression / TupleExpression / Grouping
+    = ReceiveExpression / AnonymousFunctionExpression / BooleanLiteral / NumberLiteral / StringLiteral / AtomLiteral / Identifier / ArrayExpression / TupleExpression / Grouping
 
 StringLiteral
     = '"' chars:[^"]* '"' {
@@ -307,6 +307,23 @@ TupleExpression
         return {
             type: "TupleExpression",
             elements: [first, ...rest.map(r => r[3])]
+        }
+    }
+
+ReceiveExpression
+    = "receive" _ "{" _ cases:(ReceiveCase)* _ "}" {
+        return {
+            type: "ReceiveExpression",
+            cases: cases
+        }
+    }
+
+ReceiveCase
+    = pattern:Expression _ "->" _ "{" _ body:(stmt:Statement _ { return stmt })* "}" {
+        return {
+            type: "ReceiveCase",
+            pattern: pattern,
+            body: body
         }
     }
 

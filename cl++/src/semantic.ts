@@ -48,6 +48,7 @@ class SemanticAnalyzer {
     this.globalScope.define("print", "builtin")
   }
 
+
   public analyze(node: ASTNode): void {
     switch (node.type) {
       case "Program":
@@ -90,6 +91,19 @@ class SemanticAnalyzer {
         for (const stmt of node.body) this.analyze(stmt);
         this.currentScope = previousScope;
         break;
+
+      case "ReceiveExpression":
+        for (const receiveCase of node.cases) {
+          const previousScopeReceive = this.currentScope
+          this.currentScope = new Scope(this.currentScope)
+
+          this.analyzePattern(receiveCase.pattern)
+
+          for (const stmt of receiveCase.body) this.analyze(stmt)
+
+          this.currentScope = previousScopeReceive
+        }
+        break
 
       case "VariableDeclaration":
         this.analyze(node.value);
@@ -192,6 +206,15 @@ class SemanticAnalyzer {
       case "NumberLiteral":
         break;
     }
+  }
+
+  private analyzePattern(node: ASTNode): void {
+    if (node.type === "Identifier") {
+      if (!this.currentScope.resolve(node.name)) this.currentScope.define(node.name, "variable")
+      node.symbolKind = "variable"
+    } else if (node.type === "TupleExpression" || node.type === "ArrayExpression") {
+      for (const element of node.elements) this.analyzePattern(element)
+    } else this.analyze(node)
   }
 }
 

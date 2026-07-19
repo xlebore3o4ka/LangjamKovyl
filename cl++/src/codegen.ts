@@ -45,6 +45,16 @@ const generate = (node: ASTNode, moduleName: string = "main"): string => {
 
       return `lists:foreach(fun(${iterName}) ->\n    ${forBody}\nend, ${iterableVal})`
 
+    case "ReceiveExpression":
+      const casesCode = node.cases.map(c => {
+        const pattern = generate(c.pattern, moduleName)
+        const bodyStmts = c.body.map(e => generate(e, moduleName)).join(",\n        ")
+        const bodyCode = bodyStmts.length > 0 ? bodyStmts : "ok"
+        return `${pattern} ->\n        ${bodyCode}`
+      }).join(";\n    ")
+
+      return `receive\n ${casesCode}\nend`
+
     case "TryExpression":
       const innerExpression = generate(node.argument, moduleName);
 

@@ -10,7 +10,7 @@ export type Statement =
   | ForInStatement
 
 export type PrimaryExpression =
-  StringLiteral | AtomLiteral | Identifier | BooleanLiteral | NumberLiteral | ArrayExpression | AnonymousFunctionExpression;
+  StringLiteral | AtomLiteral | Identifier | BooleanLiteral | NumberLiteral | ArrayExpression | AnonymousFunctionExpression | ReceiveExpression;
 
 export type Expression =
   | PrimaryExpression
@@ -63,6 +63,17 @@ export interface LogicalExpression {
 export interface TryExpression {
   type: "TryExpression";
   argument: Expression;
+}
+
+export interface ReceiveCase {
+  type: "ReceiveCase",
+  pattern: Expression,
+  body: Statement[]
+}
+
+export interface ReceiveExpression {
+  type: "ReceiveExpression"
+  cases: ReceiveCase[]
 }
 
 export interface WhileStatement {
