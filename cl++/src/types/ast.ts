@@ -10,7 +10,7 @@ export type Statement =
   | ForInStatement
 
 export type PrimaryExpression =
-  StringLiteral | AtomLiteral | Identifier | BooleanLiteral | NumberLiteral | ArrayExpression;
+  StringLiteral | AtomLiteral | Identifier | BooleanLiteral | NumberLiteral | ArrayExpression | AnonymousFunctionExpression;
 
 export type Expression =
   | PrimaryExpression
@@ -91,6 +91,12 @@ export interface BinaryExpression {
 export interface AtomLiteral {
   type: "AtomLiteral",
   value: string
+}
+
+export interface AnonymousFunctionExpression {
+  type: "AnonymousFunctionExpression",
+  params: Identifier[],
+  body: Statement[]
 }
 
 export interface FunctionDeclaration {

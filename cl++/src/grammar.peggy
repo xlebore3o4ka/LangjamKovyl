@@ -193,6 +193,15 @@ ArgumentList
         return [first, ...rest.map(r => r[3])]
     } / _ {return []}
 
+AnonymousFunctionExpression
+    = "fn" _ "(" _ params:ParameterList? _ ")" _ "{" _ body:(stmt:Statement _ { return stmt })* "}" {
+        return {
+            type: "AnonymousFunctionExpression",
+            params: params !== null ? params : [],
+            body: body
+        }
+    }
+
 ParameterList
     = first:Identifier rest:(_ "," _ Identifier)* {
         return [first, ...rest.map(r => r[3])]
@@ -225,7 +234,7 @@ MemberExpression
     }
 
 PrimaryExpression
-    = BooleanLiteral / NumberLiteral / StringLiteral / AtomLiteral / Identifier / ArrayExpression / TupleExpression / Grouping
+    = AnonymousFunctionExpression / BooleanLiteral / NumberLiteral / StringLiteral / AtomLiteral / Identifier / ArrayExpression / TupleExpression / Grouping
 
 StringLiteral
     = '"' chars:[^"]* '"' {

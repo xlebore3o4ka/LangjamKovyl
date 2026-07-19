@@ -64,6 +64,20 @@ class SemanticAnalyzer {
 
         break;
 
+      case "AnonymousFunctionExpression":
+        const previousScopeAnonym = this.currentScope
+        this.currentScope = new Scope(this.currentScope)
+
+        for (const param of node.params) {
+          this.currentScope.define(param.name, "parameter")
+          param.symbolKind = "parameter"
+        }
+
+        for (const stmt of node.body) this.analyze(stmt)
+
+        this.currentScope = previousScopeAnonym
+        break
+
       case "FunctionDeclaration":
         const previousScope = this.currentScope;
         this.currentScope = new Scope(this.currentScope);

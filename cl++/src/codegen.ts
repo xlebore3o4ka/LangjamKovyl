@@ -130,6 +130,15 @@ const generate = (node: ASTNode, moduleName: string = "main"): string => {
 
       return `${callee}(${args})`;
 
+    case "AnonymousFunctionExpression":
+      const anonymParams = node.params.map((e) => generate(e, moduleName)).join(", ")
+      const anonymStmts = node.body.map(e => generate(e, moduleName)).join(",\n        ")
+
+
+      const anonymBody = anonymStmts.length > 0 ? anonymStmts : "ok"
+
+      return `fun(${anonymParams}) ->\n    try\n        ${anonymBody}\n    catch\n        throw:{'__clx_return', AnonymReturnValue} -> \n        AnonymReturnValue\n        end\n    end`
+
     case "MemberExpression":
       if (node.computed) {
         const object = generate(node.object, moduleName);
