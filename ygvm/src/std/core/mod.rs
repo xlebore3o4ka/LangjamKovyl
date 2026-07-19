@@ -12,9 +12,12 @@ pub mod object;
 pub mod string;
 pub mod throwable;
 
+use crate::napi::control::exit_err;
+use crate::napi::control::exit_ok;
 use crate::napi::convert::{bool_to_native, i64_to_native, string_to_native};
 use crate::napi::module::{ClassDef, FunctionBodyDef, FunctionDef, ModuleDef};
 use crate::napi::ptr::ObjectSmartRef;
+use crate::napi_try_or_exit;
 use crate::std::core::array::{_array_eq, _array_from_json, _array_get, _array_get_sliced, _array_init, _array_insert, _array_iter, _array_len, _array_mark, _array_pop, _array_push, _array_remove, _array_remove_element, _array_set, _array_to_json, _array_to_string, _array_uninit};
 use crate::std::core::array_iterator::{_array_iterator_has_next, _array_iterator_next};
 use crate::std::core::bool::{_bool_and, _bool_eq, _bool_from_json, _bool_not, _bool_or, _bool_to_bool, _bool_to_json, _bool_to_string};
@@ -25,21 +28,27 @@ use crate::std::core::function::{_function_call, _function_init, _function_mark,
 use crate::std::core::i64::{_i64_add, _i64_div, _i64_eq, _i64_from_json, _i64_ge, _i64_gt, _i64_le, _i64_lt, _i64_mul, _i64_neg, _i64_sub, _i64_to_f64, _i64_to_i64, _i64_to_json, _i64_to_string};
 use crate::std::core::iterator::{_iterator_has_next, _iterator_next};
 use crate::std::core::map::{_map_eq, _map_from_json, _map_get, _map_init, _map_mark, _map_set, _map_to_json, _map_to_string, _map_uninit};
-use crate::utils::map::Map;
 use crate::std::core::object::{_object_eq, _object_from_json, _object_hash, _object_init, _object_neq, _object_to_json, _object_to_string};
 use crate::std::core::string::{_string_add, _string_eq, _string_from_json, _string_init, _string_to_f64, _string_to_i64, _string_to_json, _string_to_string, _string_uninit};
 use crate::std::core::throwable::_throwable_eq;
 use crate::utils::alloc::Array;
-use crate::vm::heap::ObjectRef;
+use crate::utils::map::Map;
+use crate::vm::heap::{ObjectRef, VMHeapGC};
 use crate::vm::module::{Function, VMModuleManager};
-use crate::vm::thread::VMThreadRef;
+use crate::vm::thread::{VMStackFrameRef, VMThreadRef};
 use crate::vm::{VMError, VMRef};
 
 pub fn load(vm: VMRef) -> Result<(), VMError> {
     VMModuleManager::load_napi_module(vm, &ModuleDef {
         path: "std/core".to_owned(),
         uses: vec![],
-        functions: vec![],
+        functions: vec![
+            FunctionDef {
+                name: "gc".to_owned(),
+                params: vec![],
+                body: FunctionBodyDef::Native(_gc)
+            }
+        ],
         classes: vec![
             ClassDef {
                 name: "Object".to_string(),
@@ -617,6 +626,11 @@ pub fn load(vm: VMRef) -> Result<(), VMError> {
 
 pub fn unload(_vm: VMRef) -> Result<(), VMError> {
     Ok(())
+}
+
+unsafe extern "C" fn _gc(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
+    napi_try_or_exit!(VMHeapGC::gc(thread.vm, Some(thread)));
+    exit_ok(frame, &ObjectSmartRef::null())
 }
 
 pub fn call_to_string_or_text_null(mut thread: VMThreadRef, object: ObjectSmartRef) -> Result<String, VMError> {

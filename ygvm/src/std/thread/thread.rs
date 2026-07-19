@@ -34,6 +34,7 @@ pub unsafe extern "C" fn _thread_start(mut thread: VMThreadRef, frame: VMStackFr
     if thr.owner.try_catch_owning() {
         if thr.flags.state.is_live() && !thr.flags.state.is_work() {
             hard_fence();
+            let _lock = thread.vm.threads.lock.lock();
             thread.vm.threads.pool.execute(move || {
                 hard_fence();
                 thr.owner.change_owning();

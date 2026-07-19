@@ -1,0 +1,191 @@
+module example/chat
+	use std/io
+	use std/core
+	use std/json
+	use std/utils
+	use std/thread
+
+	fun __entry__ ()
+	    io::print("Выберите режим\n- [C] Client\n- [S] Server\n> ")
+	    let input = io::readline()
+	    if (input == "C" | input == "c" | input == "Client" | input == "client")
+	        io::println("Выбран режим клиента")
+	        io::print("Введите адрес сервера (host:port):\n> ")
+	        let addr = io::readline()
+	        this::client(addr)
+	    else if (input == "S" | input == "s" | input == "Server" | input == "server")
+	        io::println("Выбран режим сервера")
+	        io::print("Введите порт на котором будет работать сервер:\n> ")
+	        let port = io::readline()
+	        this::server(port)
+        else
+            io::println("Неизвестный режим")
+        end end
+	end
+
+	fun client (addr)
+	    let client = io::open_client(addr)
+	    io::println("Успешное подключение!")
+	    io::print("Введите имя пользователя:\n> ")
+	    let username = io::readline()
+	    client.send(Request:new_login(username))
+	    io::print("Введите кол-во сообщений для запроса истории чата:\n> ")
+	    let history_count = io::readline()
+	    client.send(Request:new_history(history_count))
+	    let response = null
+	    while (response == null)
+	        response = client.recv()
+	        thread::sleep(100)
+	    end
+	    for (message in response)
+	        io::println("[" + message[0] + "] " + message[1])
+	    end
+	    thread::create(fun [client] ()
+            while (true)
+                io::print("> ")
+                let text = io::readline()
+                client.send(Request:new_message(text))
+            end
+	    end).start()
+	    thread::create(fun [client] ()
+            while (true)
+                let response = client.recv()
+                if (response != null)
+                    io::println("[" + response[0] + "] " + response[1])
+                end
+            end
+        end).start()
+        while (true)
+            core::gc()
+            thread::sleep(1000)
+        end
+	end
+
+	fun server (port)
+	    let gc_bc = 0
+	    let clients = []
+	    let server = io::open_server("127.0.0.1:" + port)
+	    while (true)
+	        let connection = server.accept()
+	        if (connection != null)
+	            io::println("Новое подключение! " + connection.addr())
+	            clients.push(connection)
+	        end
+	        let threads = []
+	        for (client in clients)
+	            let thread = thread::create(fun [*] ()
+	                try
+                        let request = client.recv()
+                        if (request != null)
+                            io::println("Получен запрос от клиента: " + request)
+                            request.exec(clients, client)
+                        end
+                    catch (err)
+                        io::println("Произошла ошибка: " + err)
+                        clients.remove_element(client)
+                        try client.close() catch (_) end
+                    end
+            	end)
+            	thread.start()
+	            threads.push(thread)
+	        end
+	        for (thread in threads)
+	            thread.join()
+	        end
+	        if (gc_bc > 25)
+	            gc_bc = 0
+                io::println("Производим сборку мусора!")
+	            core::gc()
+	        else
+	            gc_bc =+ 1
+	            thread::sleep(100)
+	        end
+	    end
+	end
+
+    class Request extends core::Object
+        def new_history (count)
+            let obj = new Request()
+            obj.type = "history"
+            obj.count = count
+            return obj
+        end
+
+        def new_login (name)
+            let obj = new Request()
+            obj.type = "login"
+            obj.username = name
+            return obj
+        end
+
+        def new_message (text)
+            let obj = new Request()
+            obj.type = "message"
+            obj.text = text
+            return obj
+        end
+
+        def exec (clients, client)
+            if (this.type == "login")
+                client.username = this.username
+                return
+            end
+            if (this.type == "history")
+                &Chat.messages.with_lock(fun [*] ()
+                    let messages = &Chat.messages.get()
+                    let messages = messages.get_sliced(messages.len() - this.count, messages.len())
+                    client.send(messages)
+                end)
+                return
+            end
+            if (this.type == "message")
+                &Chat.messages.with_lock(fun [*] ()
+                    let message = [client.username, this.text]
+                    let messages = &Chat.messages.get()
+                    messages.push(message)
+                    for (client in clients)
+                        try
+                            client.send(message)
+                        catch (err)
+                            io::println("Произошла ошибка: " + err)
+                            clients.remove_element(client)
+                            try client.close() catch (_) end
+                        end
+                    end
+                    &Chat.save()
+                end)
+                return
+            end
+        end
+
+        def __to_string__ ()
+            if (this.type == "login")
+                return "[Вход под ником " + this.username + "]"
+            end
+            if (this.type == "history")
+                return "[История чата в размере " + this.count + " сообщений]"
+            end
+            if (this.type == "message")
+                return "[Печать в чат :| " + this.text + " |: ]"
+            end
+            return "[Неизвестный]"
+        end
+    end
+
+    object Chat extends core::Object
+        def __init__ ()
+            if (io::file_exits("chat.json"))
+                this.messages = thread::mutex(json::from_string(io::file_read("chat.json")))
+            else
+                this.messages = thread::mutex([])
+            end
+            return this
+        end
+
+        def save ()
+            &Chat.messages.with_lock(fun [*] ()
+                io::file_write("chat.json", json::to_string(this.messages.get()))
+            end)
+        end
+    end
+end

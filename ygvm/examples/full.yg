@@ -1,0 +1,331 @@
+module example/full
+	use std/io
+	use std/core
+	use std/json
+	use std/utils
+	use std/thread
+
+	fun __entry__ ()
+        io::println("\n <=======[ Variable ]======> \n")
+
+        block
+            let outer = 12
+            block
+                let inner = 21
+                let outer = 0
+                outer = 33
+                io::println("Inner = " + inner + "   | Outer = " + outer)
+            end
+            io::println("Inner = " + inner + " | Outer = " + outer)
+            block
+                outer = 44
+            end
+            io::println("Inner = " + inner + " | Outer = " + outer)
+        end
+
+        io::println("\n <=====[ Simple Math ]=====> \n")
+
+        block
+            let a = 12
+            let b = 21
+            let c = a + b
+            io::println("12 + 21 = " + c)
+            io::println("5.5 - \"6\" = " + (5.5 - "6"))
+        end
+
+        io::println("\n <===[ Combined Assign ]===> \n")
+
+        block
+            let i = 10
+            io::println("i = 10 : " + i)
+            i =+ 4
+            io::println("i =+ 4 : " + i)
+        end
+
+		io::println("\n <========[ Array ]========> ")
+
+        block
+            let arr = [12, 21, 33]
+            io::println("Init: " + arr)
+            arr[0] = 444
+            arr[1] = 777
+            arr[-1] = 333
+            io::println("Set: " + arr)
+            let first = arr[-3]
+            let second = arr[-2]
+            let third = arr[2]
+            io::println("Get: " + first + ", " + second + ", " + third)
+            arr.push(202)
+            io::println("Push: " + arr)
+            arr.insert(0, 203)
+            io::println("Insert: " + arr)
+            io::println("Pop: " + arr.pop())
+            io::println("Remove: " + arr.remove(0))
+            io::println("Result: " + arr)
+        end
+
+		io::println("\n <=========[ Map ]=========> ")
+
+        block
+            let map = {"name": "Artyom"}
+            io::println("Init: " + map)
+            map["status"] = "best"
+            io::println("Set: " + map)
+            let name = map["name"]
+            let status = map["status"]
+            io::println("Get: " + name + " the " + status)
+        end
+
+        io::println("\n <========[ Loops ]========> \n")
+
+        io::println("\nWhile:")
+        block
+            let i = 0
+            while (i < 10)
+                io::println("i = " + i)
+                i =+ 1
+            end
+        end
+
+        io::println("\nFor Range:")
+        block
+            for (e in this::range(0, 5))
+                io::println("- " + e)
+            end
+        end
+
+        io::println("\nFor Array:")
+        block
+            let arr = [12, 21, 33, 44]
+            for (e in arr)
+                io::println("- " + e)
+            end
+        end
+
+        io::println("\n <=========[ Func ]========> ")
+
+        block
+            let i = 123
+            let foo = fun [*] () io::println("i = " + i) end
+            foo()
+            let foo = fun [i] () io::println("i = " + i) end
+            foo()
+            let foo = fun () io::println("i = " + i) end
+            foo()
+        end
+
+        io::println("\n <========[ Class ]========> ")
+
+        block
+            IFoo:foo()
+            Test:foo()
+
+            let test = new Test("Artyom")
+            test.hello()
+            Test:hello(test)
+
+            let other = new core::Object()
+            other.name = "DomamaN202"
+            Test:hello(other)
+        end
+
+        io::println("\n <=======[ Object ]========> ")
+
+        block
+            TestObject:foo()
+            Test:hello(&TestObject)
+            TestObject:hello()
+        end
+
+        io::println("\n <======[ Try-Catch ]======> ")
+
+        block
+            try
+                throw "Error!"
+            catch (err)
+                io::println("Error: " + err)
+            end
+
+            try
+                try
+                    let func = fun () throw "Inner Error!" end
+                    func()
+                catch (err)
+                    io::println("Error: " + err)
+                    throw "Very " + err
+                end
+            catch (err)
+                io::println("Error: " + err)
+            end
+
+            thread::create(fun ()
+                let old_cather = thread::current().set_catcher(fun (err) io::println("Caught: " + err) end)
+                throw "Uncaught exception!"
+                thread::current().set_catcher(old_cather)
+            end).join()
+        end
+
+        io::println("\n <=======[ Thread ]=======> ")
+
+        block
+            let threads = []
+            let counter = thread::mutex(0)
+
+            for (i in this::range(0, 5))
+                threads.push(
+                    thread::create(fun [i, counter] ()
+                        io::println("Created thread #" + i)
+                        let j = 0
+                        while (j < 5)
+                            counter.with_lock(fun [*] ()
+                                io::println("[" + i + "]\tCounter: " + counter.set(counter.get() + 1))
+                            end)
+                            thread::sleep(utils::random(0, 100))
+                            j =+ 1
+                        end
+                        io::println("Completed thread #" + i)
+                    end)
+                )
+            end
+
+            for (thr in threads)
+                thr.start()
+            end
+
+            for (thr in threads)
+                thr.join()
+            end
+        end
+
+        io::println("\n <=====[ Thread Pool ]====> ")
+
+        block
+            let threads = []
+            let counter = thread::mutex(0)
+
+            for (i in this::range(0, 100))
+                threads.push(
+                    thread::create(fun [i, counter] ()
+                        counter.with_lock(fun [*] ()
+                            io::println("[" + i + "]\tCounter: " + counter.set(counter.get() + 1))
+                        end)
+                    end)
+                )
+            end
+
+            for (thr in threads)
+                thr.start()
+            end
+
+            for (thr in threads)
+                thr.join()
+            end
+        end
+
+        io::println("\n <=========[ Json ]========> ")
+
+        block
+            let i = 12
+            let i = json::to_string(i)
+            io::println("[T] i = " + i)
+            let i = json::from_string(i)
+            io::println("[F] i = " + i + "\n")
+
+            let j = 21.33
+            let j = json::to_string(j)
+            io::println("[T] j = " + j)
+            let j = json::from_string(j)
+            io::println("[F] j = " + j + "\n")
+
+            let flag = true
+            let flag = json::to_string(flag)
+            io::println("[T] flag = " + flag)
+            let flag = json::from_string(flag)
+            io::println("[F] flag = " + flag + "\n")
+
+            let text = "Artyom top!"
+            let text = json::to_string(text)
+            io::println("[T] text = " + text)
+            let text = json::from_string(text)
+            io::println("[F] text = " + text + "\n")
+
+            let array = [12, 21, 33]
+            let array = json::to_string(array)
+            io::println("[T] array = " + array)
+            let array = json::from_string(array)
+            io::println("[F] array = " + array + "\n")
+
+            let map = { "name": "Artyom" }
+            let map = json::to_string(map)
+            io::println("[T] map = " + map)
+            let map = json::from_string(map)
+            io::println("[F] map = " + map + "\n")
+
+            let null_ = null
+            let null_ = json::to_string(null_)
+            io::println("[T] null = " + null_)
+            let null_ = json::from_string(null_)
+            io::println("[F] null = " + null_ + "\n")
+
+            let test = new Test("Artyom")
+            let test = json::to_string(test)
+            io::println("[T] test = " + test)
+            let test = json::from_string(test)
+            io::println("[F] test = " + test)
+            test.foo()
+            test.hello()
+        end
+	end
+
+    class IFoo extends core::Object
+        def foo ()
+	        io::println("Foo!")
+        end
+    end
+
+    class IHello extends core::Object
+	    def hello ()
+	        io::println("Hello, " + this.name + "!")
+	    end
+    end
+
+	class Test extends core::Object and IFoo and IHello
+	    def __init__ (name)
+	        io::println("Init called!")
+	        this.name = name
+	        return this
+	    end
+	end
+
+	object TestObject extends Test
+	    def __init__ ()
+	        return Test:__init__(this, "Artemida")
+	    end
+	end
+
+	fun range (from, to)
+	    return new Range(from, to)
+	end
+
+    class Range extends core::Iterator
+        def __init__ (from, to)
+            this.i = from
+            this.to = to
+            return this
+        end
+
+        def __iter__ ()
+            return this
+        end
+
+        def has_next ()
+            return this.i < this.to
+        end
+
+        def next ()
+            let old = this.i
+            this.i =+ 1
+            return old
+        end
+    end
+end

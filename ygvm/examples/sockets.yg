@@ -1,0 +1,50 @@
+module example/sockets
+	use std/io
+	use std/core
+	use std/json
+	use std/utils
+	use std/thread
+
+	fun __entry__ ()
+	    let threads = []
+
+	    threads.push(thread::create(fun [] ()
+	        let server = io::open_server("127.0.0.1:25565")
+	        while (true)
+	            let connection = server.accept();
+	            if (connection != null)
+                    io::println("[S] New Connection: " + connection.addr())
+                    connection.send(0)
+                    while (true)
+                        let message = connection.recv()
+                        if (message != null)
+                            io::println("[S] Incoming Message: " + message)
+                            thread::sleep(1000)
+                            connection.send(message + 1)
+                        else
+                        	thread::sleep(100)
+                        end
+                    end
+                end
+            end
+	    end))
+
+	    threads.push(thread::create(fun [] ()
+	        let client = io::open_client("127.0.0.1:25565")
+	        while (true)
+	            let message = client.recv()
+	            if (message != null)
+	                io::println("[C] Incoming Message: " + message)
+                    thread::sleep(1000)
+	                client.send(message + 1)
+	            else
+	                thread::sleep(100)
+                end
+	        end
+	    end))
+
+	    for (thread in threads)
+	        thread.start()
+	    end
+	end
+end

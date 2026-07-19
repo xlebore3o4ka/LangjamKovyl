@@ -1,0 +1,7 @@
+module example/hello
+	use std/io
+
+	fun __entry__ ()
+		io::println("Hello, Artyom!")
+	end
+end

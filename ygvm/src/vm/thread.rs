@@ -8,7 +8,8 @@ use crate::vm::heap::{ObjectRef, VMHeap};
 use crate::vm::module::VMModuleManager;
 use crate::vm::{Function, VMError, VMRef, VMState};
 use crate::{napi, ownership_hack_mut};
-use parking_lot::Mutex;
+use parking_lot::ReentrantMutex;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::ops::{Deref, DerefMut};
@@ -16,8 +17,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use threadpool::ThreadPool;
 
 pub struct VMThreadManager {
+    pub lock: ReentrantMutex<()>,
     pub pool: ThreadPool,
-    pub threads: Mutex<Vec<Boxed<VMThread>>>
+    pub threads: Vec<Boxed<VMThread>>
 }
 
 pub struct VMThread {
@@ -84,12 +86,13 @@ impl VMThreadManager {
         // SAFETY: 1 всегда больше 0.
         let available_processors = std::thread::available_parallelism().unwrap_or_else(|_| unsafe { NonZeroUsize::new_unchecked(1) }).get();
         Self {
+            lock: ReentrantMutex::new(()),
             pool: ThreadPool::new(available_processors),
-            threads: Mutex::new(Vec::new())
+            threads: Vec::new(),
         }
     }
 
-    pub fn new_thread(vm: VMRef) -> VMThreadRef {
+    pub fn new_thread(mut vm: VMRef) -> VMThreadRef {
         let tid = thread_id::get();
         let thread = Boxed::new(
             VMThread {
@@ -103,20 +106,23 @@ impl VMThreadManager {
                 cather: ObjectRef::null(),
             }
         );
-        // SAFETY: Гарантия структуры.
         let ref_thread = thread.as_raw();
         hard_fence();
-        vm.threads.threads.lock().push(thread);
+        let lock = vm.this().threads.lock.lock();
+        vm.threads.threads.push(thread);
+        drop(lock);
         hard_fence();
         VMThreadRef(ref_thread)
     }
 
     pub fn check_threads_is_work(vm: VMRef) -> bool {
-        vm.threads.threads.lock().iter().any(|x| x.flags.state.is_work())
+        let _lock = vm.threads.lock.lock();
+        vm.threads.threads.iter().any(|x| x.flags.state.is_work())
     }
 
     pub fn check_threads_is_allow_gc(vm: VMRef) -> bool {
-        vm.threads.threads.lock().iter().all(|x| x.flags.state.is_gc_allow())
+        let _lock = vm.threads.lock.lock();
+        vm.threads.threads.iter().all(|x| x.flags.state.is_gc_allow())
     }
 }
 

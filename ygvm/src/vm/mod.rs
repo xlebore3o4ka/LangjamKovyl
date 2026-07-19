@@ -192,7 +192,9 @@ impl VM {
 
     fn stop0(&mut self) -> Result<(), VMError> {
         // Очистка потоков
-        self.threads.threads.lock().clear();
+        let _lock = self.threads.lock.lock();
+        self.threads.threads.clear();
+        drop(_lock);
         // Запуск деинициализации модулей
         let modules_count = self.modules.modules.read().len();
         for i in 0..modules_count {

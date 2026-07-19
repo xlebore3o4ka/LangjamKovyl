@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::ptr::{null_mut, NonNull};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use crate::std::thread::thread::hard_fence;
 
 pub struct VMHeap {
     pub gc: VMHeapGC,
@@ -164,20 +165,26 @@ impl VMHeapGC {
             }
         }
         // - Объекты в кадрах живых потоков
-        for thread in vm.threads.threads.lock().iter().filter(|thread| thread.flags.state.is_live()) {
-            for frame in &thread.frames {
-                for block in &frame.locals.blocks {
-                    for local in block.values() {
-                        if let Some(local) = local.try_deref() {
-                            Self::gc_add_to_marking(vm, mark, &mut for_marking, local)?;
+        let _lock = vm.threads.lock.lock();
+        for i in 0..vm.threads.threads.len() {
+            let thread = VMThreadRef(vm.threads.threads[i].as_raw());
+            if thread.flags.state.is_live() {
+                for frame in &thread.frames {
+                    for block in &frame.locals.blocks {
+                        for local in block.values() {
+                            if let Some(local) = local.try_deref() {
+                                Self::gc_add_to_marking(vm, mark, &mut for_marking, local)?;
+                            }
                         }
                     }
                 }
-            }
-            if let Some(cather) = thread.cather.try_deref() {
-                Self::gc_add_to_marking(vm, mark, &mut for_marking, cather)?;
+                hard_fence();
+                if let Some(cather) = thread.cather.try_deref() {
+                    Self::gc_add_to_marking(vm, mark, &mut for_marking, cather)?;
+                }
             }
         }
+        drop(_lock);
         // Маркировка
         while let Some(object) = for_marking.pop() {
             for field in object.fields.values() {
