@@ -9,11 +9,10 @@ use crate::vm::module::VMModuleManager;
 use crate::vm::{Function, VMError, VMRef, VMState};
 use crate::{napi, ownership_hack_mut};
 use parking_lot::ReentrantMutex;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{fence, AtomicUsize, Ordering};
 use threadpool::ThreadPool;
 
 pub struct VMThreadManager {
@@ -642,6 +641,8 @@ impl VMThreadOwner {
 
 impl VMThreadState {
     pub fn change(mut this: VMThreadRef, state: VMThreadState) {
+        let _lock = this.this().vm.threads.lock.lock();
+        fence(Ordering::Acquire);
         if state.is_work() {
             if this.flags.gc {
                 this.flags.state = VMThreadState::Suspended;
@@ -651,8 +652,8 @@ impl VMThreadState {
                 this.vm.flags.wait_allow_execution_and_no_gc();
             }
         }
-
         this.flags.state = state;
+        fence(Ordering::Release);
     }
 
     pub fn is_gc_allow(&self) -> bool {

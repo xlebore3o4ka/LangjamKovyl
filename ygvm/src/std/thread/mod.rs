@@ -5,12 +5,12 @@ use crate::napi::control::{exit_err, exit_ok};
 use crate::napi::convert::i64_to_native;
 use crate::napi::module::{ClassDef, FunctionBodyDef, FunctionDef, ModuleDef};
 use crate::napi::ptr::ObjectSmartRef;
-use crate::std::thread::mutex::{_mutex_get, _mutex_init, _mutex_lock, _mutex_mark, _mutex_set, _mutex_to_json, _mutex_try_lock, _mutex_try_with_lock, _mutex_uninit, _mutex_unlock, _mutex_with_lock, alloc_mutex};
+use crate::std::thread::mutex::{_mutex_from_json, _mutex_get, _mutex_init, _mutex_lock, _mutex_mark, _mutex_set, _mutex_to_json, _mutex_try_lock, _mutex_try_with_lock, _mutex_uninit, _mutex_unlock, _mutex_with_lock, alloc_mutex};
 use crate::utils::mutex::Mutex;
 use crate::std::thread::thread::{_thread_create_wrapper, _thread_get_catcher, _thread_join, _thread_set_catcher, _thread_start, _thread_to_json, alloc_thread, thread_native_data};
 use crate::vm::heap::ObjectRef;
 use crate::vm::module::VMModuleManager;
-use crate::vm::thread::{VMStackFrameRef, VMThreadManager, VMThreadRef};
+use crate::vm::thread::{VMStackFrameRef, VMThreadManager, VMThreadRef, VMThreadState};
 use crate::vm::{VMError, VMRef};
 use crate::napi_try_or_exit;
 
@@ -142,6 +142,11 @@ pub fn load(vm: VMRef) -> Result<(), VMError> {
                         params: vec![],
                         body: FunctionBodyDef::Native(_mutex_to_json)
                     },
+                    FunctionDef {
+                        name: "__from_json__".to_owned(),
+                        params: vec!["value".to_owned()],
+                        body: FunctionBodyDef::Native(_mutex_from_json)
+                    },
                 ],
                 allocation: size_of::<Mutex<ObjectRef>>()
             },
@@ -159,7 +164,10 @@ unsafe extern "C" fn _sleep(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut
     let value = ObjectSmartRef::new(value);
     let value = i64_to_native(thread, value);
     let value = napi_try_or_exit!(value);
+    let saved_state = thread.flags.state;
+    VMThreadState::change(thread, VMThreadState::RunningNativeClean);
     std::thread::sleep(std::time::Duration::from_millis(value as u64));
+    VMThreadState::change(thread, saved_state);
     exit_ok(frame, &ObjectSmartRef::null())
 }
 
@@ -190,7 +198,8 @@ unsafe extern "C" fn _create(thread: VMThreadRef, frame: VMStackFrameRef) -> *mu
 
 unsafe extern "C" fn _mutex(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
     let value = frame.locals.get_global("value");
-    let value = alloc_mutex(thread, value);
+    let value = ObjectSmartRef::new(value);
+    let value = alloc_mutex(thread, &value);
     let value = napi_try_or_exit!(value);
     let value = value.into();
     exit_ok(frame, &value)

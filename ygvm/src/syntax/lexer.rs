@@ -104,8 +104,11 @@ pub enum TokenData {
     Percent,        // %
 
     And,            // &
+    AndAnd,         // &&
     Or,             // |
+    OrOr,           // ||
     Xor,            // ^
+    XorXor,         // ^^
     Not,            // !
 
     Eq,             // ==
@@ -158,9 +161,9 @@ impl Lexer {
                 '*'  => self.try_next('*', || TokenData::StarStar,   || TokenData::Star),
                 '/'  => self.try_next('/', || TokenData::SlashSlash, || TokenData::Slash),
                 '%'  => self.ok_token(TokenData::Percent),
-                '&'  => self.ok_token(TokenData::And),
-                '|'  => self.ok_token(TokenData::Or),
-                '^'  => self.ok_token(TokenData::Xor),
+                '&'  => self.try_next('&', || TokenData::AndAnd,     || TokenData::And),
+                '|'  => self.try_next('|', || TokenData::OrOr,       || TokenData::Or),
+                '^'  => self.try_next('^', || TokenData::XorXor,     || TokenData::Xor),
                 '!'  => self.try_next('=', || TokenData::Neq,        || TokenData::Not),
                 '<'  => self.try_next('=', || TokenData::Le,         || TokenData::Lt),
                 '>'  => self.try_next('=', || TokenData::Ge,         || TokenData::Gt),
@@ -202,9 +205,12 @@ impl Lexer {
                                             '\\' => text.push('\\'),
                                             '\'' => text.push('\''),
                                             '\"' => text.push('\"'),
-                                            'n' => text.push('\n'),
-                                            'r' => text.push('\r'),
+                                            'a' => text.push('\x07'),
+                                            'b' => text.push('\x08'),
                                             't' => text.push('\t'),
+                                            'n' => text.push('\n'),
+                                            'f' => text.push('\x0C'),
+                                            'r' => text.push('\r'),
                                             _ => return self.err_string_format()
                                         }
                                     } else { return self.err_string_format() }

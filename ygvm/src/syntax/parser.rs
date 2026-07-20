@@ -821,6 +821,9 @@ impl Parser {
         Ok(left)
     }
 
+    /// Возвращает бинарный оператор и его приоритет.
+    /// Теперь бинарные операторы используют двойные символы: &&, ||, ^^.
+    /// Одиночный & используется только как унарная объектная ссылка.
     fn peek_binary_op(&self) -> Option<(BinaryOp, u8)> {
         match self.peek_data() {
             Some(TokenData::Plus) => Some((BinaryOp::Add, 4)),
@@ -834,9 +837,10 @@ impl Parser {
             Some(TokenData::Gt) => Some((BinaryOp::Gt, 3)),
             Some(TokenData::Le) => Some((BinaryOp::Le, 3)),
             Some(TokenData::Ge) => Some((BinaryOp::Ge, 3)),
-            Some(TokenData::And) => Some((BinaryOp::And, 2)),
-            Some(TokenData::Or) => Some((BinaryOp::Or, 1)),
-            Some(TokenData::Xor) => Some((BinaryOp::Xor, 2)),
+            // ВНИМАНИЕ: вместо одиночных &, |, ^ теперь используются двойные:
+            Some(TokenData::AndAnd) => Some((BinaryOp::And, 2)),   // &&
+            Some(TokenData::OrOr)   => Some((BinaryOp::Or, 1)),    // ||
+            Some(TokenData::XorXor) => Some((BinaryOp::Xor, 2)),   // ^^
             _ => None,
         }
     }
@@ -919,6 +923,7 @@ impl Parser {
                 })
             }
             // Ссылка на объект: &X
+            // Здесь используется одиночный &, который теперь НЕ является бинарным оператором.
             Some(TokenData::And) => {
                 self.next_token()?;
                 let path_str = self.parse_path()?;
@@ -1003,6 +1008,9 @@ impl Parser {
                             let base_path = if let Some(path) = self.use_map.get(first) {
                                 path.clone()
                             } else if first.contains('/') {
+                                first.to_string()
+                            } else if self.module_path.as_deref() == Some(first) {
+                                // если первый компонент — это имя текущего модуля
                                 first.to_string()
                             } else {
                                 let debug = self.current_debug();

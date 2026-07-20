@@ -15,7 +15,7 @@ use crate::std::io::server::{_server_accept, _server_init, _server_uninit, alloc
 use crate::utils::socket::client::Client;
 use crate::utils::socket::server::{Connection, Server};
 use crate::vm::module::VMModuleManager;
-use crate::vm::thread::{VMStackFrameRef, VMThreadRef};
+use crate::vm::thread::{VMStackFrameRef, VMThreadRef, VMThreadState};
 use crate::vm::{VMError, VMRef};
 use std::fs;
 use std::io::Write;
@@ -168,9 +168,13 @@ pub fn unload(_vm: VMRef) -> Result<(), VMError> {
 }
 
 unsafe extern "C" fn _readline(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
+    let saved_state = thread.flags.state;
+    VMThreadState::change(thread, VMThreadState::RunningNativeClean);
     let mut text = String::new();
-    napi_try_or_exit!(map_std_io_err_to_vm_throw(thread, std::io::stdin().read_line(&mut text)));
-    text.pop();
+    let result = std::io::stdin().read_line(&mut text);
+    napi_try_or_exit!(map_std_io_err_to_vm_throw(thread, result));
+    VMThreadState::change(thread, saved_state);
+    if text.ends_with('\n') { text.pop(); }
     let text = alloc_string(thread, text);
     let text = napi_try_or_exit!(text);
     let text = text.into();

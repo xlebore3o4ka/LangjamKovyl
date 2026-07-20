@@ -1,8 +1,9 @@
 use crate::napi::alloc::alloc_bool;
-use crate::napi::control::{exit_err, exit_ok};
+use crate::napi::control::{exit_err, exit_ok, exit_throw};
 use crate::napi::ptr::{ObjectSmartRef, ObjectSmartRefNN};
 use crate::napi_try_or_exit;
 use crate::std::core::array::array_native_data;
+use crate::std::core::exception::alloc_exception;
 use crate::vm::heap::{ObjectRef, ObjectRefNN, VMHeap};
 use crate::vm::module::VMModuleManager;
 use crate::vm::thread::{VMStackFrameRef, VMThreadRef};
@@ -50,6 +51,13 @@ pub unsafe extern "C" fn _array_iterator_next(_thread: VMThreadRef, frame: VMSta
     *offset += 1;
     exit_ok(frame, &value)
 }
+
+pub unsafe extern "C" fn _array_iterator_to_json(thread: VMThreadRef, _frame: VMStackFrameRef) -> *mut Result<(), VMError> {
+    let exception = alloc_exception(thread, "Array iterator not support json serialization".to_owned());
+    let exception = napi_try_or_exit!(exception);
+    exit_throw(exception)
+}
+
 
 fn array_iterator_native_data(this: ObjectRefNN) -> (&'static mut Vec<ObjectRef>, &'static mut usize) {
     // SAFETY: Гарантия стандарта.

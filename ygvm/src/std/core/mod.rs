@@ -19,7 +19,7 @@ use crate::napi::module::{ClassDef, FunctionBodyDef, FunctionDef, ModuleDef};
 use crate::napi::ptr::ObjectSmartRef;
 use crate::napi_try_or_exit;
 use crate::std::core::array::{_array_eq, _array_from_json, _array_get, _array_get_sliced, _array_init, _array_insert, _array_iter, _array_len, _array_mark, _array_pop, _array_push, _array_remove, _array_remove_element, _array_set, _array_to_json, _array_to_string, _array_uninit};
-use crate::std::core::array_iterator::{_array_iterator_has_next, _array_iterator_next};
+use crate::std::core::array_iterator::{_array_iterator_has_next, _array_iterator_next, _array_iterator_to_json};
 use crate::std::core::bool::{_bool_and, _bool_eq, _bool_from_json, _bool_not, _bool_or, _bool_to_bool, _bool_to_json, _bool_to_string};
 use crate::std::core::callable::{_callable_call, _callable_eq};
 use crate::std::core::exception::_exception_to_string;
@@ -385,16 +385,6 @@ pub fn load(vm: VMRef) -> Result<(), VMError> {
                         body: FunctionBodyDef::Native(_array_len)
                     },
                     FunctionDef {
-                        name: "get_sliced".to_owned(),
-                        params: vec!["from".to_owned(), "to".to_owned()],
-                        body: FunctionBodyDef::Native(_array_get_sliced)
-                    },
-                    FunctionDef {
-                        name: "remove_element".to_owned(),
-                        params: vec!["value".to_owned()],
-                        body: FunctionBodyDef::Native(_array_remove_element)
-                    },
-                    FunctionDef {
                         name: "push".to_owned(),
                         params: vec!["value".to_owned()],
                         body: FunctionBodyDef::Native(_array_push)
@@ -410,6 +400,11 @@ pub fn load(vm: VMRef) -> Result<(), VMError> {
                         body: FunctionBodyDef::Native(_array_insert)
                     },
                     FunctionDef {
+                        name: "remove_element".to_owned(),
+                        params: vec!["value".to_owned()],
+                        body: FunctionBodyDef::Native(_array_remove_element)
+                    },
+                    FunctionDef {
                         name: "remove".to_owned(),
                         params: vec!["index".to_owned()],
                         body: FunctionBodyDef::Native(_array_remove)
@@ -418,6 +413,11 @@ pub fn load(vm: VMRef) -> Result<(), VMError> {
                         name: "__set__".to_owned(),
                         params: vec!["index".to_owned(), "value".to_owned()],
                         body: FunctionBodyDef::Native(_array_set)
+                    },
+                    FunctionDef {
+                        name: "get_sliced".to_owned(),
+                        params: vec!["from".to_owned(), "to".to_owned()],
+                        body: FunctionBodyDef::Native(_array_get_sliced)
                     },
                     FunctionDef {
                         name: "__get__".to_owned(),
@@ -530,6 +530,11 @@ pub fn load(vm: VMRef) -> Result<(), VMError> {
                         params: vec![],
                         body: FunctionBodyDef::Native(_array_iterator_next)
                     },
+                    FunctionDef {
+                        name: "__to_json__".to_owned(),
+                        params: vec![],
+                        body: FunctionBodyDef::Native(_array_iterator_to_json)
+                    }
                 ],
                 allocation: size_of::<(&'static mut Vec<ObjectRef>, usize)>()
             },

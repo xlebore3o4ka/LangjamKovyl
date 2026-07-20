@@ -125,6 +125,13 @@ pub unsafe extern "C" fn _function_call(mut thread: VMThreadRef, frame: VMStackF
     result
 }
 
+pub unsafe extern "C" fn _function_to_json(thread: VMThreadRef, _frame: VMStackFrameRef) -> *mut Result<(), VMError> {
+    let exception = alloc_exception(thread, "Function not support json serialization".to_owned());
+    let exception = napi_try_or_exit!(exception);
+    exit_throw(exception)
+}
+
+
 fn function_native_data(this: &ObjectSmartRefNN) -> (&'static mut Function, &'static mut Array<(String, ObjectRef)>) {
     // SAFETY: Гарантия стандарта.
     unsafe {
@@ -136,10 +143,4 @@ fn function_native_data(this: &ObjectSmartRefNN) -> (&'static mut Function, &'st
         let captures = &mut *ptr;
         (func, captures)
     }
-}
-
-pub unsafe extern "C" fn _function_to_json(thread: VMThreadRef, _frame: VMStackFrameRef) -> *mut Result<(), VMError> {
-    let exception = alloc_exception(thread, "Function not support json serialization".to_owned());
-    let exception = napi_try_or_exit!(exception);
-    exit_throw(exception)
 }

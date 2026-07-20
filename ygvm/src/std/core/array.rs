@@ -176,6 +176,36 @@ pub unsafe extern "C" fn _array_insert(thread: VMThreadRef, frame: VMStackFrameR
     exit_ok(frame, &value)
 }
 
+pub unsafe extern "C" fn _array_remove_element(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
+    let this = frame.locals.get_global("this");
+    let this = ObjectSmartRefNN::deref(this);
+    let this = napi_try_or_exit!(this);
+    let value = frame.locals.get_global("value");
+    let value = ObjectSmartRef::new(value);
+    let array = array_native_data(&this);
+    let mut error = Ok(());
+    let position =
+        array.iter().position(|x| {
+            match call_eq_or_eq(thread, value.clone(), ObjectSmartRef::new(x.clone())) {
+                Ok(value) => value,
+                Err(err) => {
+                    error = Err(err);
+                    false
+                }
+            }
+        });
+    napi_try_or_exit!(error);
+    let value =
+        if let Some(position) = position {
+            let element = array.remove(position);
+            let element = ObjectSmartRef::new(element);
+            element
+        } else {
+            ObjectSmartRef::null()
+        };
+    exit_ok(frame, &value)
+}
+
 pub unsafe extern "C" fn _array_remove(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
     let this = frame.locals.get_global("this");
     let this = ObjectSmartRefNN::deref(this);
@@ -238,36 +268,6 @@ pub unsafe extern "C" fn _array_get_sliced(thread: VMThreadRef, frame: VMStackFr
     let value = alloc_array(thread, value);
     let value = napi_try_or_exit!(value);
     let value = value.into();
-    exit_ok(frame, &value)
-}
-
-pub unsafe extern "C" fn _array_remove_element(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
-    let this = frame.locals.get_global("this");
-    let this = ObjectSmartRefNN::deref(this);
-    let this = napi_try_or_exit!(this);
-    let value = frame.locals.get_global("value");
-    let value = ObjectSmartRef::new(value);
-    let array = array_native_data(&this);
-    let mut error = Ok(());
-    let position =
-        array.iter().position(|x| {
-            match call_eq_or_eq(thread, value.clone(), ObjectSmartRef::new(x.clone())) {
-                Ok(value) => value,
-                Err(err) => {
-                    error = Err(err);
-                    false
-                }
-            }
-        });
-    napi_try_or_exit!(error);
-    let value = 
-        if let Some(position) = position {
-            let element = array.remove(position);
-            let element = ObjectSmartRef::new(element);
-            element
-        } else {
-            ObjectSmartRef::null()
-        };
     exit_ok(frame, &value)
 }
 

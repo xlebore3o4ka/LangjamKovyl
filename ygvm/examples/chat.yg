@@ -8,67 +8,64 @@ module example/chat
 	fun __entry__ ()
 	    io::print("Выберите режим\n- [C] Client\n- [S] Server\n> ")
 	    let input = io::readline()
-	    if (input == "C" | input == "c" | input == "Client" | input == "client")
-	        io::println("Выбран режим клиента")
+	    if (input == "C" || input == "c" || input == "Client" || input == "client")
+	        &CLI.println("Выбран режим клиента")
 	        io::print("Введите адрес сервера (host:port):\n> ")
 	        let addr = io::readline()
 	        this::client(addr)
-	    else if (input == "S" | input == "s" | input == "Server" | input == "server")
-	        io::println("Выбран режим сервера")
+	    else if (input == "S" || input == "s" || input == "Server" || input == "server")
+	        &CLI.println("Выбран режим сервера")
 	        io::print("Введите порт на котором будет работать сервер:\n> ")
 	        let port = io::readline()
 	        this::server(port)
         else
-            io::println("Неизвестный режим")
+            &CLI.println("Неизвестный режим")
         end end
 	end
 
 	fun client (addr)
 	    let client = io::open_client(addr)
-	    io::println("Успешное подключение!")
+	    &CLI.println("Успешное подключение!")
 	    io::print("Введите имя пользователя:\n> ")
 	    let username = io::readline()
 	    client.send(Request:new_login(username))
 	    io::print("Введите кол-во сообщений для запроса истории чата:\n> ")
 	    let history_count = io::readline()
 	    client.send(Request:new_history(history_count))
-	    let response = null
-	    while (response == null)
-	        response = client.recv()
-	        thread::sleep(100)
-	    end
-	    for (message in response)
-	        io::println("[" + message[0] + "] " + message[1])
-	    end
+	    &CLI.run_cli()
+	    &CLI.on_input = fun [client] (text) client.send(Request:new_message(text)) end
+	    &CLI.on_exit = fun [client] ()
+            client.send(Request:new_exit(text))
+            client.close()
+        end
 	    thread::create(fun [client] ()
-            while (true)
-                io::print("> ")
-                let text = io::readline()
-                client.send(Request:new_message(text))
-            end
-	    end).start()
-	    thread::create(fun [client] ()
-            while (true)
-                let response = client.recv()
-                if (response != null)
-                    io::println("[" + response[0] + "] " + response[1])
+            while (&CLI.run)
+                try
+                    let response = client.recv()
+                    if (response != null)
+                        response.exec()
+                    end
+                catch (err)
+                    &CLI.println("Произошла ошибка: " + err)
                 end
             end
         end).start()
-        while (true)
+        while (&CLI.run)
             core::gc()
             thread::sleep(1000)
         end
 	end
 
 	fun server (port)
+	    &CLI.run_cli()
 	    let gc_bc = 0
 	    let clients = []
 	    let server = io::open_server("127.0.0.1:" + port)
-	    while (true)
+	    &Chat.load()
+	    while (&CLI.run)
 	        let connection = server.accept()
 	        if (connection != null)
-	            io::println("Новое подключение! " + connection.addr())
+	            &CLI.println("Новое подключение! " + connection.addr())
 	            clients.push(connection)
 	        end
 	        let threads = []
@@ -77,11 +74,11 @@ module example/chat
 	                try
                         let request = client.recv()
                         if (request != null)
-                            io::println("Получен запрос от клиента: " + request)
+                            &CLI.println("Получен запрос от клиента: " + request)
                             request.exec(clients, client)
                         end
                     catch (err)
-                        io::println("Произошла ошибка: " + err)
+                        &CLI.println("Произошла ошибка: " + err)
                         clients.remove_element(client)
                         try client.close() catch (_) end
                     end
@@ -94,27 +91,34 @@ module example/chat
 	        end
 	        if (gc_bc > 25)
 	            gc_bc = 0
-                io::println("Производим сборку мусора!")
+                &CLI.println("Производим сборку мусора!")
 	            core::gc()
 	        else
 	            gc_bc =+ 1
 	            thread::sleep(100)
 	        end
 	    end
+        &Chat.save()
 	end
 
     class Request extends core::Object
-        def new_history (count)
-            let obj = new Request()
-            obj.type = "history"
-            obj.count = count
-            return obj
-        end
-
         def new_login (name)
             let obj = new Request()
             obj.type = "login"
             obj.username = name
+            return obj
+        end
+
+        def new_exit ()
+            let obj = new Request()
+            obj.type = "exit"
+            return obj
+        end
+
+        def new_history (count)
+            let obj = new Request()
+            obj.type = "history"
+            obj.count = count
             return obj
         end
 
@@ -128,39 +132,44 @@ module example/chat
         def exec (clients, client)
             if (this.type == "login")
                 client.username = this.username
+                Request:exec_broadcast(clients, new Message("<Server>", "Пользователь " + client.username + " вошёл в чат"))
+                return
+            end
+            if (this.type == "exit")
+                clients.remove_element(client)
+                try client.close() catch (_) end
+                Request:exec_broadcast(clients, new Message("<Server>", "Пользователь " + client.username + " покинул чат"))
                 return
             end
             if (this.type == "history")
-                &Chat.messages.with_lock(fun [*] ()
-                    let messages = &Chat.messages.get()
-                    let messages = messages.get_sliced(messages.len() - this.count, messages.len())
-                    client.send(messages)
-                end)
+                client.send(Response:new_history(this.count))
                 return
             end
             if (this.type == "message")
-                &Chat.messages.with_lock(fun [*] ()
-                    let message = [client.username, this.text]
-                    let messages = &Chat.messages.get()
-                    messages.push(message)
-                    for (client in clients)
-                        try
-                            client.send(message)
-                        catch (err)
-                            io::println("Произошла ошибка: " + err)
-                            clients.remove_element(client)
-                            try client.close() catch (_) end
-                        end
-                    end
-                    &Chat.save()
-                end)
+                Request:exec_broadcast(clients, new Message(client.username, this.text))
                 return
+            end
+        end
+
+        def exec_broadcast (clients, message)
+            &Chat.messages.with_lock(fun [*] () &Chat.messages.get().push(message) end)
+            for (client in clients)
+                try
+                    client.send(Response:new_message(message))
+                    catch (err)
+                    &CLI.println("Произошла ошибка: " + err)
+                    clients.remove_element(client)
+                    try client.close() catch (_) end
+                end
             end
         end
 
         def __to_string__ ()
             if (this.type == "login")
                 return "[Вход под ником " + this.username + "]"
+            end
+            if (this.type == "exit")
+                return "[Выход под ником " + this.username + "]"
             end
             if (this.type == "history")
                 return "[История чата в размере " + this.count + " сообщений]"
@@ -172,20 +181,99 @@ module example/chat
         end
     end
 
+    class Response extends core::Object
+        def new_history (count)
+            let obj = new Response()
+            obj.type = "history"
+            obj.list = &Chat.messages.with_lock(fun [count] () return &Chat.messages.get().get_sliced(&Chat.messages.get().len() - count, &Chat.messages.get().len()) end)
+            return obj
+        end
+
+        def new_message (message)
+            let obj = new Response()
+            obj.type = "message"
+            obj.message = message
+            return obj
+        end
+
+        def exec ()
+            if (this.type == "history")
+                for (message in this.list)
+                    &CLI.println("[" + message.sender + "] " + message.text)
+                end
+                return
+            end
+            if (this.type == "message")
+                &CLI.println("[" + this.message.sender + "] " + this.message.text)
+                return
+            end
+        end
+    end
+
+    class Message extends core::Object
+        def __init__ (sender, text)
+            this.sender = sender
+            this.text = text
+            return this
+        end
+    end
+
     object Chat extends core::Object
-        def __init__ ()
+        def load ()
+            &CLI.println("Загрузка сообщений чата...")
             if (io::file_exits("chat.json"))
-                this.messages = thread::mutex(json::from_string(io::file_read("chat.json")))
+                this.messages = json::from_string(io::file_read("chat.json"))
+                &CLI.println("Загрузка сообщения чата загружены!")
             else
                 this.messages = thread::mutex([])
+                &CLI.println("Загрузка сообщения чата не найдены!")
             end
-            return this
         end
 
         def save ()
+            &CLI.println("Сохранение сообщений чата...")
             &Chat.messages.with_lock(fun [*] ()
-                io::file_write("chat.json", json::to_string(this.messages.get()))
+                io::file_write("chat.json", json::to_string(this.messages))
+                &CLI.println("Сообщения сообщения чата сохранены!")
             end)
+        end
+    end
+
+    object CLI extends core::Object
+        def __init__ ()
+            this.on_input = fun () end
+            this.on_exit = fun () end
+            return this
+        end
+
+        def set_on_input (func)
+            this.on_input = func
+        end
+
+        def run_cli ()
+            &CLI.println("Для выхода введите \"/exit\"")
+            this.run = true
+            thread::create(fun [this] ()
+                while (this.run)
+                    io::print("> ")
+                    let text = io::readline()
+                    if (text == "/exit")
+                        this.run = false
+                        &CLI.println("Завершение сеанса...")
+                        this.on_exit()
+                        return
+                    end
+                    this.on_input(text)
+                end
+            end).start()
+        end
+
+        def println (text)
+            if (this.run)
+                io::print("\b\b" + text + "\n> ")
+            else
+                io::println(text)
+            end
         end
     end
 end

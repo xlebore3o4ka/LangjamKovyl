@@ -175,35 +175,6 @@ pub unsafe extern "C" fn _string_to_json(thread: VMThreadRef, frame: VMStackFram
     let value = value.into();
     exit_ok(frame, &value)
 }
-pub unsafe extern "C" fn _i64_from_json(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
-    let value = frame.locals.get_global("value");
-    let value = ObjectSmartRef::new(value);
-    let value = json_element_to_native(thread, value);
-    let value = napi_try_or_exit!(value);
-    let value =
-        match value {
-            Value::Number(value) => value,
-            _ => {
-                let exception = alloc_exception(thread, "Int from json parsing error".to_owned());
-                let exception = napi_try_or_exit!(exception);
-                return exit_throw(exception)
-            }
-        };
-    let value = value.as_i64();
-    let value =
-        match value {
-            Some(value) => value,
-            None => {
-                let exception = alloc_exception(thread, "Int from json parsing error".to_owned());
-                let exception = napi_try_or_exit!(exception);
-                return exit_throw(exception)
-            }
-        };
-    let value = alloc_i64(thread, value);
-    let value = napi_try_or_exit!(value);
-    let value = value.into();
-    exit_ok(frame, &value)
-}
 
 pub unsafe extern "C" fn _string_from_json(thread: VMThreadRef, frame: VMStackFrameRef) -> *mut Result<(), VMError> {
     let value = frame.locals.get_global("value");
