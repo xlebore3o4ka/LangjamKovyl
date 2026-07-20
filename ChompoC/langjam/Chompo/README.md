@@ -40,7 +40,7 @@ On Windows with a multi-config generator, use `build\Debug\Chompo.exe` (or Relea
 
 ## Launch (secure default)
 
-Terminal 1 — server (host, port, history limit, **password**):
+Terminal 1 — server (host, port, history limit, **password** minimum 10 chars):
 
 ```bash
 ./build/Chompo langjam/Chompo/chat_server.chmp 127.0.0.1 4040 50 'your-long-password'

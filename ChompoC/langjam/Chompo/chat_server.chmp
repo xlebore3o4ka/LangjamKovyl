@@ -1,6 +1,3 @@
-// Chompo secure chat server — PR #17 crypto + PR #16 rooms/moderation.
-// Default transport is AES-256-GCM. Pass --plaintext for explicit open mode only.
-
 var commandLine = args();
 var bindHost = "0.0.0.0";
 var bindPort = 4040;
@@ -26,7 +23,7 @@ if (len(positionals) > 3)
 if (historyLimit < 1)
     historyLimit = 1;
 
-var MIN_PASSWORD_LEN = 12;
+var MIN_PASSWORD_LEN = 10;
 var HANDSHAKE_DEADLINE_MS = 7000;
 var MAX_PENDING = 32;
 
