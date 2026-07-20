@@ -21,3 +21,7 @@ for name = names do
   print:(greeting(name), free=true)
 end
 ```
+
+plic info:
+
+launching via `nimble run -- examples/chat.kvl`
