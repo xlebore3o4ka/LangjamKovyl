@@ -9,7 +9,6 @@
   "license": "MIT",
   "publisher": "TraumDE",
   "type": "module",
-  "main": "./dist/extension.js",
   "l10n": "./l10n",
   "scripts": {
     "compile": "tsc",
