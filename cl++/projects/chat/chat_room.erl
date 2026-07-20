@@ -10,7 +10,6 @@
 chat_room(Client,Db,My_nick,Target_nick) ->
     try
         clear_screen:clear_screen(Client),
-    gen_tcp:send(Client, unicode:characters_to_binary("\n--- Чат с " ++ Target_nick ++ " ---\n(Введи /exit для выхода)\n\n")),
     throw({'__clx_return', chat_receive_loop(Client, Db, My_nick, Target_nick)})
     catch
         throw:{'__clx_return', ReturnValue} -> 

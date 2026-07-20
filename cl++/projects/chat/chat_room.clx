@@ -4,7 +4,6 @@ import "menu"
 
 pub fn chat_room(client, db, my_nick, target_nick) {
     clear_screen.clear_screen(client)
-    gen_tcp.send(client, unicode.characters_to_binary("\n--- Чат с " ++ target_nick ++ " ---\n(Введи /exit для выхода)\n\n"))
 
     return chat_receive_loop(client, db, my_nick, target_nick)
 }
