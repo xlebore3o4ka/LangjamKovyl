@@ -11,7 +11,7 @@ The language syntax is designed to be readable and unambiguous.
 **Syntax example:**
 
 ```kovyl
-func char[*] greeting(char[32] name) do 
+func string greeting(char[32] name) do 
   return fmt:("Hello from Kovyl, ", name, "!")
 end
 
