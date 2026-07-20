@@ -8,7 +8,8 @@
     "lint:fix": "oxlint --fix ./src",
     "fmt": "oxfmt ./src",
     "fmt:check": "oxfmt --check ./src",
-    "build": "tsup"
+    "build": "tsup",
+    "compile": "pnpm build && node dist/index.js"
   },
   "keywords": [],
   "author": "",
