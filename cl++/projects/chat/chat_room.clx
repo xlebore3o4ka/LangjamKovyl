@@ -7,7 +7,7 @@ pub fn chat_room(client, db, my_nick, target_nick) {
 
     load_chat_history(client, db, my_nick, target_nick)
 
-    gen_tcp.send(client, unicode.characters_to_binary("[ " ++ "Вы вошли в чат с " ++ target_nick ++ " | " ++ "/exit - чтоб выйти с чата " ++ "| " ++ "Приятного общения!:)" ++ " ]\n"))
+    gen_tcp.send(client, unicode.characters_to_binary("[ " ++ "Вы вошли в чат с " ++ target_nick ++ " | " ++ "/exit - чтоб выйти с чата, /help - напомнить команды" ++ "| " ++ "Приятного общения!:)" ++ " ]\n"))
 
     return chat_receive_loop(client, db, my_nick, target_nick)
 }
@@ -19,6 +19,11 @@ fn chat_receive_loop(client, db, my_nick, target_nick) {
 
             if (text == "/exit") {
                 return menu.menu(client, db, my_nick)
+            }
+
+            if (text == "/help") {
+                gen_tcp.send(client, unicode.characters_to_binary("Доступные команды: /exit - выйти, /help - помощь\n"))
+                return chat_receive_loop(client, db, my_nick, target_nick)
             }
 
             if (text == "") {

@@ -11,7 +11,7 @@ chat_room(Client,Db,My_nick,Target_nick) ->
     try
         clear_screen:clear_screen(Client),
     load_chat_history(Client, Db, My_nick, Target_nick),
-    gen_tcp:send(Client, unicode:characters_to_binary("[ " ++ "Вы вошли в чат с " ++ Target_nick ++ " | " ++ "/exit - чтоб выйти с чата " ++ "| " ++ "Приятного общения!:)" ++ " ]\n")),
+    gen_tcp:send(Client, unicode:characters_to_binary("[ " ++ "Вы вошли в чат с " ++ Target_nick ++ " | " ++ "/exit - чтоб выйти с чата, /help - напомнить команды" ++ "| " ++ "Приятного общения!:)" ++ " ]\n")),
     throw({'__clx_return', chat_receive_loop(Client, Db, My_nick, Target_nick)})
     catch
         throw:{'__clx_return', ReturnValue} -> 
@@ -26,6 +26,13 @@ chat_receive_loop(Client,Db,My_nick,Target_nick) ->
         case clx_std:to_boolean(Text == "/exit") of
     true -> 
         throw({'__clx_return', menu:menu(Client, Db, My_nick)});
+    _ ->
+        ok
+end,
+        case clx_std:to_boolean(Text == "/help") of
+    true -> 
+        gen_tcp:send(Client, unicode:characters_to_binary("Доступные команды: /exit - выйти, /help - помощь\n")),
+    throw({'__clx_return', chat_receive_loop(Client, Db, My_nick, Target_nick)});
     _ ->
         ok
 end,
