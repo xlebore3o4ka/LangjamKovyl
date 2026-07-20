@@ -1,0 +1,129 @@
+#+TITLE: Фторлисп
+#+AUTHOR: Друан Филипп Сергеевич
+#+LANGUAGE: ru
+
+#+LATEX_CLASS:  article
+#+LATEX_HEADER: \usepackage[T2A]{fontenc}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[russian]{babel}
+#+LATEX_HEADER: \hypersetup{colorlinks=true}
+
+* Описание языка
+Статически типизированный чисто функциональный Лисп.
+Компилируется в Erlang.
+
+** Базовые типы
+Базовые типы:
+
+*** Int
+Базовый числовой тип. Поддерживает сложение, вычитание, умножение, деление.
+
+*** String
+Строковый литерал.
+
+*** List
+Типизированный список. Записывается так:
+ 1) Кавычка '
+ 2) Имя типа
+ 3) Сам список в скобках (желательно квадратных, но можно и круглых)
+Между всеми ними не должно быть пробелов!
+Для работы с ним есть специальные формы. У меня в языке нет обобщённых функций, но если бы они были, сигнатуры бы у специальных форм были такими:
+#+begin_src racket
+  (dec first [(List a)] a)
+  (dec rest  [(List a)] (List a))
+  (dec cons  [a (List a)] (List a))
+  ; Внимание! Это псевдокод! У меня в языке нет обобщённых функций!
+#+end_src
+
+#+begin_src racket
+  (let lst 'Number[1 2 3])
+
+  (first lst) ; 1
+  (rest lst)  ; 'Number[2 3]
+
+  (cons 0 lst) ; 'Number[0 1 2 3]
+#+end_src
+
+*** Алгебраический тип
+#+begin_src racket
+  (data Command
+    (send String)
+    (help)
+    (quit))
+
+  (let command (send "Привет!"))
+
+  (match command
+    [(send message)
+     (println message)]
+    [(help)
+     (println "? - help ! - quit")]
+    [(quit)
+     (println "Good luck!")])
+#+end_src
+
+Алгебраические типы переводятся в кортежи Erlang с тегом. Паттерн-матчинг делается при помощи конструкици case
+
+** Модули
+Каждый файл - это модуль. В модуле могут быть:
+1) Константы
+2) Определения функций
+3) Определения типов
+4) Выражения
+
+** Константы
+Константы бывают числовыми и строковыми.
+#+begin_src racket
+  (let num 123)
+  (let string "Hello")
+#+end_src
+Тип константы выводится.
+
+** Опреаторы
+В языке есть математические операторы:
+#+begin_src racket
+  (let a 10)
+  (let b 4)
+
+  (println (+ a b)) ; 14
+  (println (- a b)) ; 6
+  (println (* a b)) ; 40
+  (println (/ a b)) ; 
+#+end_src
+
+** Функции
+Функции определяются вот так:
+#+begin_src racket
+  (dec foo [Int Int] Int)
+  (def foo [a b]
+     (+ a b))
+
+  (dec fact [Int] Int)
+  (def fact [num]
+    (if (= num 0)
+        1
+        (* num
+           (fact (- num 1)))))
+
+  (dec and [Bool Bool] Bool)
+  (def and [a b]
+    (= a b true))
+
+  (dec not [Bool] Bool)
+  (def not [a]
+  	(= a false))
+
+  (dec or [Bool Bool] Bool)
+  (def or [a b]
+  	(not (= a b false)))
+
+  (dec xor [Bool Bool] Bool)
+  (def xor [a b]
+  	(not (= a b)))
+#+end_src
+
+Вызываются функции как в обычном Лиспе:
+#+begin_src racket
+(print num)
+#+end_src
+Если вызов функции прошел проверку типов, он компилируется в вызов функции Erlang с таким же именем.
