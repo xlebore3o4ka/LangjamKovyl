@@ -1,0 +1,12 @@
+var array = Array{1, 2, 3};
+
+print(len(array), "\n");
+print(array[1], "\n");
+
+array[0] = 10;
+array[1]++;
+
+print(array, "\n");
+
+print(Array{1, 2} + Array{3, 4}, "\n");
+print(Array{5} * 3, "\n");

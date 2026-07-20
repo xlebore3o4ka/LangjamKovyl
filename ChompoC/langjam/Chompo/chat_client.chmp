@@ -1,0 +1,534 @@
+// Chompo secure chat client — registration state machine, rooms, local mute.
+// Default: AES-256-GCM. Pass --plaintext only for explicit open mode.
+
+var commandLine = args();
+var serverHost = "127.0.0.1";
+var serverPort = 4040;
+var roomPassword = NULL;
+var plaintextMode = false;
+var positionals = Array{};
+
+for (var item in commandLine) {
+    if (item == "--plaintext")
+        plaintextMode = true;
+    else
+        push(positionals, item);
+}
+if (len(positionals) > 0)
+    serverHost = positionals[0];
+if (len(positionals) > 1)
+    serverPort = Int(positionals[1]);
+if (len(positionals) > 2)
+    roomPassword = positionals[2];
+
+// Client state machine:
+// CONNECTING -> SECURE_HANDSHAKE / PLAIN -> WAIT_NAME_PROMPT -> WAIT_NAME_CONFIRM -> REGISTERED
+var STATE_CONNECTING = "connecting";
+var STATE_HANDSHAKE = "handshake";
+var STATE_WAIT_NAME_PROMPT = "wait_name_prompt";
+var STATE_WAIT_NAME_CONFIRM = "wait_name_confirm";
+var STATE_REGISTERED = "registered";
+var clientState = STATE_CONNECTING;
+
+var ownName = "";
+var ownRole = "member";
+var currentRoom = "lobby";
+var muted = Array{};
+var pendingName = "";
+
+fun startsWith(text, prefix) {
+    if (len(text) < len(prefix))
+        return false;
+    var index = 0;
+    while (index < len(prefix)) {
+        if (text[index] != prefix[index])
+            return false;
+        index++;
+    }
+    return true;
+}
+
+fun sliceFrom(text, start) {
+    var result = "";
+    var index = start;
+    while (index < len(text)) {
+        result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun findChar(text, target, start) {
+    var index = start;
+    while (index < len(text)) {
+        if (text[index] == target)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listIndexOf(list, value) {
+    var index = 0;
+    while (index < len(list)) {
+        if (list[index] == value)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listContains(list, value) {
+    return listIndexOf(list, value) >= 0;
+}
+
+fun listRemoveItem(list, value) {
+    var index = listIndexOf(list, value);
+    if (index < 0)
+        return false;
+    removeAt(list, index);
+    return true;
+}
+
+// Char indexing is byte-based; high UTF-8 bytes come back as negative Int values.
+fun byteCode(ch) {
+    var code = Int(ch);
+    if (code < 0)
+        return code + 256;
+    return code;
+}
+
+fun isControlByte(ch) {
+    var code = byteCode(ch);
+    if (code < 32)
+        return true;
+    if (code == 127)
+        return true;
+    return false;
+}
+
+// Strip C0 controls / DEL / ESC only. Keep printable ASCII and full UTF-8 (Cyrillic etc.).
+fun sanitizeRemote(text) {
+    var result = "";
+    var index = 0;
+    while (index < len(text)) {
+        if (!isControlByte(text[index]))
+            result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun showHeader() {
+    if (termInteractive()) {
+        termClear();
+        termPrint("╔════════════════════════════════════════════════════════════╗", "accent");
+        if (plaintextMode)
+            termPrint("║                 CHOMPO CHAT (PLAINTEXT)                    ║", "warning");
+        else
+            termPrint("║                    CHOMPO SECURE CHAT                      ║", "accent");
+        termPrint("╚════════════════════════════════════════════════════════════╝", "accent");
+    }
+
+    if (plaintextMode)
+        termPrint("⚠ PLAINTEXT  •  " + serverHost + ":" + String(serverPort), "warning");
+    else
+        termPrint("🔒 AES-256-GCM  •  " + serverHost + ":" + String(serverPort), "muted");
+    termPrint("/help  /users  /rooms  /join  /status  /mute  /history  /clear  /quit  /exit", "muted");
+    termPrint("", "default");
+}
+
+fun sendChatLine(socket, text) {
+    if (plaintextMode) {
+        var sent = netSendAll(socket, text + "\n", 2000);
+        return sent[0] == "sent";
+    }
+    var result = netSecureSendLine(socket, text, 2000);
+    return result[0] == "sent";
+}
+
+fun receiveChatLine(socket) {
+    if (plaintextMode)
+        return netReceiveLine(socket);
+    return netSecureReceiveLine(socket);
+}
+
+fun forgetChatConnection(socket) {
+    if (!plaintextMode)
+        netSecureForget(socket);
+    return NULL;
+}
+
+fun packetStyle(text) {
+    if (len(text) > 0 && text[0] == "*"[0])
+        return "system";
+    if (startsWith(text, "ERROR") || startsWith(text, "KICKED"))
+        return "error";
+    if (startsWith(text, "OK ") || startsWith(text, "PONG") || startsWith(text, "STATUS "))
+        return "success";
+    if (startsWith(text, "COMMANDS") || startsWith(text, "HELP") || startsWith(text, "USERS ") ||
+        startsWith(text, "USER ") || startsWith(text, "HISTORY ") || startsWith(text, "ROOMS ") ||
+        startsWith(text, "ROOM ") || startsWith(text, "ROLE ") || startsWith(text, "BANS ") ||
+        startsWith(text, "WHITELIST ") || text == "END")
+        return "info";
+    if (startsWith(text, "[DM "))
+        return "accent";
+    if (text == "BYE")
+        return "warning";
+    return "message";
+}
+
+fun parseChatSender(line) {
+    // Supports "Name: body" and "[HH:MM:SS] Name: body" for local mute filtering.
+    if (startsWith(line, "ERROR") || startsWith(line, "OK ") || startsWith(line, "HISTORY ") ||
+        startsWith(line, "USERS ") || startsWith(line, "USER ") || startsWith(line, "STATUS ") ||
+        startsWith(line, "ROOM ") || startsWith(line, "ROOMS ") || startsWith(line, "ROLE ") ||
+        startsWith(line, "COMMANDS") || startsWith(line, "[DM ") || startsWith(line, "KICKED") ||
+        startsWith(line, "NAME ") || startsWith(line, "BANS ") || startsWith(line, "WHITELIST ") ||
+        startsWith(line, "* ") || startsWith(line, "[SERVER]"))
+        return NULL;
+
+    var rest = line;
+    if (len(line) > 0 && line[0] == "["[0]) {
+        var close = findChar(line, "]"[0], 0);
+        if (close < 0 || close + 2 >= len(line) || line[close + 1] != " "[0])
+            return NULL;
+        rest = sliceFrom(line, close + 2);
+    }
+
+    var colon = findChar(rest, ":"[0], 0);
+    if (colon < 1)
+        return NULL;
+    if (colon + 1 >= len(rest) || rest[colon + 1] != " "[0])
+        return NULL;
+
+    var name = "";
+    var i = 0;
+    while (i < colon) {
+        name = name + rest[i];
+        i++;
+    }
+    return name;
+}
+
+fun printLocalHelp() {
+    termPrint("HELP --- client ---", "info");
+    termPrint("HELP /mute <name> — скрыть сообщения пользователя у себя", "info");
+    termPrint("HELP /unmute <name> — снова показывать", "info");
+    termPrint("HELP /mutes — список локальных mute", "info");
+    termPrint("HELP /clear — очистить экран", "info");
+    return NULL;
+}
+
+fun handleLocalCommand(line) {
+    if (line == "/help") {
+        printLocalHelp();
+        return false;
+    }
+
+    if (line == "/mute" || startsWith(line, "/mute ")) {
+        if (line == "/mute") {
+            termPrint("usage: /mute <name>", "warning");
+            return true;
+        }
+        var target = sliceFrom(line, 6);
+        var space = findChar(target, " "[0], 0);
+        if (space >= 0) {
+            var t = "";
+            var i = 0;
+            while (i < space) {
+                t = t + target[i];
+                i++;
+            }
+            target = t;
+        }
+        if (target == ownName) {
+            termPrint("cannot mute yourself", "warning");
+            return true;
+        }
+        if (!listContains(muted, target))
+            push(muted, target);
+        termPrint("muted " + target, "success");
+        return true;
+    }
+
+    if (line == "/unmute" || startsWith(line, "/unmute ")) {
+        if (line == "/unmute") {
+            termPrint("usage: /unmute <name>", "warning");
+            return true;
+        }
+        var unTarget = sliceFrom(line, 8);
+        var unSpace = findChar(unTarget, " "[0], 0);
+        if (unSpace >= 0) {
+            var u = "";
+            var j = 0;
+            while (j < unSpace) {
+                u = u + unTarget[j];
+                j++;
+            }
+            unTarget = u;
+        }
+        if (!listRemoveItem(muted, unTarget))
+            termPrint(unTarget + " was not muted", "warning");
+        else
+            termPrint("unmuted " + unTarget, "success");
+        return true;
+    }
+
+    if (line == "/mutes") {
+        var body = "";
+        var m = 0;
+        while (m < len(muted)) {
+            if (m > 0)
+                body = body + " ";
+            body = body + muted[m];
+            m++;
+        }
+        if (len(body) == 0)
+            body = "(empty)";
+        termPrint("muted: " + body, "info");
+        return true;
+    }
+
+    return false;
+}
+
+fun printPacketLine(text) {
+    var clean = sanitizeRemote(text);
+
+    if (startsWith(clean, "ROLE "))
+        ownRole = sliceFrom(clean, 5);
+
+    if (startsWith(clean, "ROOM "))
+        currentRoom = sliceFrom(clean, 5);
+
+    var sender = parseChatSender(clean);
+    if (sender != NULL && listContains(muted, sender))
+        return true;
+
+    termPrint(clean, packetStyle(clean));
+    return true;
+}
+
+fun printPacket(packet) {
+    if (packet[0] == "data")
+        return printPacketLine(packet[1]);
+
+    if (packet[0] == "wait")
+        return true;
+
+    if (packet[0] == "error")
+        termPrint("Ошибка канала: " + packet[1], "error");
+    else
+        termPrint("Соединение с сервером закрыто.", "warning");
+    return false;
+}
+
+fun promptForName(socket) {
+    var name = termReadLine("Имя › ", false, "accent");
+    if (name == NULL)
+        return false;
+    if (!sendChatLine(socket, name)) {
+        termPrint("Не удалось отправить имя.", "error");
+        return false;
+    }
+    pendingName = name;
+    clientState = STATE_WAIT_NAME_CONFIRM;
+    return true;
+}
+
+fun waitForGoodbye(socket) {
+    var attempts = 0;
+    while (attempts < 30) {
+        var ready = netPoll(Array{socket}, 100);
+        if (len(ready) > 0) {
+            while (true) {
+                var packet = receiveChatLine(socket);
+                if (packet[0] == "wait")
+                    break;
+                if (packet[0] != "data") {
+                    printPacket(packet);
+                    return NULL;
+                }
+                printPacketLine(packet[1]);
+                if (packet[1] == "BYE")
+                    return NULL;
+            }
+        }
+        attempts++;
+    }
+    return NULL;
+}
+
+fun closeClient(socket) {
+    forgetChatConnection(socket);
+    netClose(socket);
+    termSetPrompt("");
+    termClose();
+    return NULL;
+}
+
+fun runSecureHandshake(socket) {
+    var begin = netSecureClientBegin(socket, roomPassword);
+    if (begin[0] != "ok") {
+        termPrint("Не удалось начать защищённое соединение: " + begin[1], "error");
+        return false;
+    }
+
+    clientState = STATE_HANDSHAKE;
+    var attempts = 0;
+    while (attempts < 200) {
+        var step = netSecureClientStep(socket);
+        if (step[0] == "ok") {
+            termPrint("Защищённый канал установлен.", "success");
+            clientState = STATE_WAIT_NAME_PROMPT;
+            return true;
+        }
+        if (step[0] == "error") {
+            termPrint("Не удалось создать защищённое соединение: " + step[1], "error");
+            return false;
+        }
+        netPoll(Array{socket}, 50);
+        attempts++;
+    }
+
+    termPrint("Таймаут защищённого рукопожатия.", "error");
+    return false;
+}
+
+fun handleServerLine(socket, line) {
+    var clean = sanitizeRemote(line);
+
+    // Successful name set (registration or /nick).
+    if (startsWith(clean, "OK NAME ")) {
+        ownName = sliceFrom(clean, 8);
+        clientState = STATE_REGISTERED;
+        termPrint(clean, "success");
+        termSetPrompt(ownName + " › ", "accent");
+        return true;
+    }
+
+    // Name registration flow.
+    if (clientState == STATE_WAIT_NAME_PROMPT || clientState == STATE_WAIT_NAME_CONFIRM) {
+        if (startsWith(clean, "NAME ")) {
+            termPrint(clean, "info");
+            if (!promptForName(socket))
+                return false;
+            return true;
+        }
+
+        if (startsWith(clean, "ERROR NAME ") || startsWith(clean, "ERROR ")) {
+            termPrint(clean, "error");
+            clientState = STATE_WAIT_NAME_PROMPT;
+            if (!promptForName(socket))
+                return false;
+            return true;
+        }
+    }
+
+    return printPacketLine(clean);
+}
+
+fun main() {
+    termOpen();
+    termSetTitle("Chompo Secure Chat");
+    showHeader();
+
+    if (!plaintextMode) {
+        if (roomPassword == NULL)
+            roomPassword = termReadLine("Пароль комнаты › ", true, "warning");
+
+        // Do not reject short passwords here — wrong length/value fails at handshake
+        // the same way as any incorrect password (no separate "too short" message).
+        if (roomPassword == NULL || len(roomPassword) == 0) {
+            termPrint("Пароль не может быть пустым.", "error");
+            termClose();
+            return NULL;
+        }
+    }
+
+    termPrint("Подключение к " + serverHost + ":" + String(serverPort) + "...", "info");
+    var socket = netConnect(serverHost, serverPort);
+
+    if (plaintextMode) {
+        termPrint("Режим PLAINTEXT (без шифрования).", "warning");
+        clientState = STATE_WAIT_NAME_PROMPT;
+    } else {
+        if (!runSecureHandshake(socket)) {
+            forgetChatConnection(socket);
+            netClose(socket);
+            termClose();
+            return NULL;
+        }
+    }
+
+    var running = true;
+    while (running) {
+        // Always drain the receive buffer first. After secure handshake, NAME may already
+        // sit in NetworkManager's line buffer while the socket is no longer "readable",
+        // so netPoll alone would miss it (flaky on Windows CI).
+        while (true) {
+            var packet = receiveChatLine(socket);
+            if (packet[0] == "wait")
+                break;
+
+            if (packet[0] != "data") {
+                printPacket(packet);
+                running = false;
+                break;
+            }
+
+            if (!handleServerLine(socket, packet[1])) {
+                running = false;
+                break;
+            }
+        }
+
+        if (!running)
+            break;
+
+        // Only accept chat/console input once registered (name prompts use termReadLine).
+        if (clientState != STATE_REGISTERED) {
+            netPoll(Array{socket}, 25);
+            continue;
+        }
+
+        netPoll(Array{socket}, 25);
+
+        var console = termPoll(0);
+        if (console[0] == "data") {
+            var line = console[1];
+
+            if (line == "/clear") {
+                showHeader();
+                termSetPrompt(ownName + " › ", "accent");
+            } else {
+                if (handleLocalCommand(line)) {
+                    // local only
+                } else {
+                    if (!sendChatLine(socket, line)) {
+                        termPrint("Не удалось отправить сообщение.", "error");
+                        running = false;
+                    }
+
+                    if (line == "/quit" || line == "/exit") {
+                        waitForGoodbye(socket);
+                        running = false;
+                    }
+
+                    // /nick success updates prompt via OK NAME handler.
+                }
+            }
+        } else {
+            if (console[0] == "closed") {
+                if (sendChatLine(socket, "/quit"))
+                    waitForGoodbye(socket);
+                running = false;
+            }
+        }
+    }
+
+    return closeClient(socket);
+}
+
+main();

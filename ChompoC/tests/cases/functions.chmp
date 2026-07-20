@@ -1,0 +1,24 @@
+fun factorial(n) {
+    if (n <= 1)
+        return 1;
+
+    return n * factorial(n - 1);
+}
+
+fun make_counter(start) {
+    var value = start;
+
+    fun next() {
+        value++;
+        return value;
+    }
+
+    return next;
+}
+
+print(factorial(6), "\n");
+
+var counter = make_counter(10);
+
+print(counter(), "\n");
+print(counter(), "\n");

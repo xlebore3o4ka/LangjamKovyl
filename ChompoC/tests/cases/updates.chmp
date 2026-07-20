@@ -1,0 +1,17 @@
+var number = 10;
+
+print(number++, "\n");
+print(number, "\n");
+print(++number, "\n");
+
+var text = "abc";
+
+text[0]++;
+text[1] = 'X';
+
+print(text, "\n");
+
+var array = Array{10};
+array[0]++;
+
+print(array, "\n");

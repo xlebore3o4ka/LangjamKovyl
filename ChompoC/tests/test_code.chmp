@@ -1,0 +1,176 @@
+print("true + true = ", true + true, "\n");
+print("true + 10 = ", true + 10, "\n");
+print("true + 2.5 = ", true + 2.5, "\n");
+
+print("5 / 2 = ", 5 / 2, "\n");
+print("5 / 2.0 = ", 5 / 2.0, "\n");
+
+print("true == 1: ", true == 1, "\n");
+print("false == 0.0: ", false == 0.0, "\n");
+print("1 == 1.0: ", 1 == 1.0, "\n");
+
+print("string: ", "value = " + 10, "\n");
+print("reverse: ", true + " result", "\n");
+
+print("repeat: ", "ab" * 3, "\n");
+print("reverse repeat: ", 2 * "cd", "\n");
+
+var value = true;
+value += true;
+
+print("value = ", value, "\n");
+
+var number = 10;
+number += 2.5;
+
+print("number = ", number, "\n");
+
+print("Int(true) = ", Int(true), "\n");
+print("Int(12.9) = ", Int(12.9), "\n");
+print("Int(\"-15\") = ", Int("-15"), "\n");
+print("Int(NULL) = ", Int(NULL), "\n");
+
+print("Double(true) = ", Double(true), "\n");
+print("Double(10) = ", Double(10), "\n");
+print("Double(\"2.75\") = ", Double("2.75"), "\n");
+
+print("Bool(0) = ", Bool(0), "\n");
+print("Bool(2.5) = ", Bool(2.5), "\n");
+print("Bool(\"\") = ", Bool(""), "\n");
+print("Bool(\"text\") = ", Bool("text"), "\n");
+
+print("String(true) = ", String(true), "\n");
+print("String(10) = ", String(10), "\n");
+print("String(2.5) = ", String(2.5), "\n");
+print("String(NULL) = ", String(NULL), "\n");
+
+var convert = Int;
+print("stored function = ", convert("42"), "\n");
+print("type of true = ", Type(true), "\n");
+
+fun add(a, b) {
+    return a + b;
+}
+
+print("add = ", add(10, 20), "\n");
+
+var operation = add;
+print("stored = ", operation(4, 5), "\n");
+
+
+fun factorial(n) {
+    if (n <= 1)
+        return 1;
+
+    return n * factorial(n - 1);
+}
+
+print("factorial = ", factorial(6), "\n");
+
+
+fun make_counter(start) {
+    var value = start;
+
+    fun next() {
+        value += 1;
+        return value;
+    }
+
+    return next;
+}
+
+var counter = make_counter(10);
+
+print(counter(), "\n");
+print(counter(), "\n");
+print(counter(), "\n");
+
+
+fun without_return() {
+    var temporary = 10;
+}
+
+print("default = ", without_return(), "\n");
+
+var chars = Array("acd");
+
+print(chars, "\n");
+print(String(chars), "\n");
+print(CATS(chars), "\n");
+
+print(Array{'h', 'i'}, "\n");
+print(CATS(Array{'h', 'i'}), "\n");
+
+print(Char("A"), "\n");
+print(Char(66), "\n");
+print(Int('A'), "\n");
+
+var constructor = Array;
+print(constructor("xy"), "\n");
+
+var x = Array{1, 2};
+
+var array = Array{10, 20, 30};
+var text = "abc";
+
+print("lengths: ",
+      len(array), " ",
+      len(text), "\n");
+
+print(array[1], "\n");
+print(text[1], "\n");
+
+array[0]++;
+++array[1];
+
+text[0]++;
+text[1] = 'X';
+
+print(array, "\n");
+print(text, "\n");
+
+print(Array(Array{1, 2}[0]) + Array{3, 4}, "\n");
+print(Array{1, 2} * 3, "\n");
+
+{
+var x = 5;
+    print(x++, " ", x, "\n");
+    print(++x, " ", x, "\n");
+
+    ;;;
+}
+
+fun func(start) {
+    if (start == 0) return Array{0};
+    print(start, '\n');
+    return Array{start} + func(start - 1);
+}
+
+print(func(10), '\n');
+
+var child = Array{1};
+
+var first = Array{child};
+var second = Array{child};
+
+second[0][0] = 10;
+
+print(first, "\n");
+print(second, "\n");
+
+fun test() {
+    var value = 0;
+
+    while (value < 10) {
+        value++;
+
+        if (value < 5)
+            continue;
+
+        return value;
+    }
+
+    return NULL;
+}
+
+print(test()); // 5

@@ -1,0 +1,1138 @@
+var commandLine = args();
+var bindHost = "0.0.0.0";
+var bindPort = 4040;
+var historyLimit = 50;
+var roomPassword = NULL;
+var plaintextMode = false;
+var positionals = Array{};
+
+for (var item in commandLine) {
+    if (item == "--plaintext")
+        plaintextMode = true;
+    else
+        push(positionals, item);
+}
+if (len(positionals) > 0)
+    bindHost = positionals[0];
+if (len(positionals) > 1)
+    bindPort = Int(positionals[1]);
+if (len(positionals) > 2)
+    historyLimit = Int(positionals[2]);
+if (len(positionals) > 3)
+    roomPassword = positionals[3];
+if (historyLimit < 1)
+    historyLimit = 1;
+
+var MIN_PASSWORD_LEN = 10;
+var HANDSHAKE_DEADLINE_MS = 7000;
+var MAX_PENDING = 32;
+
+// Connected clients (secure session established or plaintext accepted).
+var clients = Array{};
+var names = Array{};
+var statuses = Array{};
+var roles = Array{};
+var rooms = Array{};
+
+// Pending secure handshakes: handle + start tick counter (approx ms via loop ticks).
+var pending = Array{};
+var pendingStarted = Array{};
+var tickMs = 0;
+
+// Rooms + per-room history.
+var roomList = Array{"lobby"};
+var histories = Array{Array{}};
+
+// Moderation: Map for O(1) membership; arrays keep stable list order for display.
+var banned = Map{};
+var bannedNames = Array{};
+var whitelist = Map{};
+var whitelistNames = Array{};
+var whitelistOn = false;
+
+fun startsWith(text, prefix) {
+    if (len(text) < len(prefix))
+        return false;
+    var index = 0;
+    while (index < len(prefix)) {
+        if (text[index] != prefix[index])
+            return false;
+        index++;
+    }
+    return true;
+}
+
+fun sliceFrom(text, start) {
+    var result = "";
+    var index = start;
+    while (index < len(text)) {
+        result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun findChar(text, target, start) {
+    var index = start;
+    while (index < len(text)) {
+        if (text[index] == target)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listIndexOf(list, value) {
+    var index = 0;
+    while (index < len(list)) {
+        if (list[index] == value)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listContains(list, value) {
+    return listIndexOf(list, value) >= 0;
+}
+
+fun listRemoveItem(list, value) {
+    var index = listIndexOf(list, value);
+    if (index < 0)
+        return false;
+    removeAt(list, index);
+    return true;
+}
+
+fun twoDigits(n) {
+    if (n < 10)
+        return "0" + String(n);
+    return String(n);
+}
+
+fun formatTime() {
+    var parts = clockTime();
+    return twoDigits(parts[0]) + ":" + twoDigits(parts[1]) + ":" + twoDigits(parts[2]);
+}
+
+fun splitCmd(line) {
+    var space = findChar(line, " "[0], 0);
+    if (space < 0)
+        return Array{line, ""};
+    var head = "";
+    var i = 0;
+    while (i < space) {
+        head = head + line[i];
+        i++;
+    }
+    return Array{head, sliceFrom(line, space + 1)};
+}
+
+// Char indexing is byte-based; high UTF-8 bytes come back as negative Int values.
+fun byteCode(ch) {
+    var code = Int(ch);
+    if (code < 0)
+        return code + 256;
+    return code;
+}
+
+fun isControlByte(ch) {
+    var code = byteCode(ch);
+    if (code < 32)
+        return true;
+    if (code == 127)
+        return true;
+    return false;
+}
+
+// Names: UTF-8 allowed (e.g. Cyrillic). Block controls, ESC, ':', and leading '/'.
+fun isSafeName(candidate, maxBytes) {
+    if (len(candidate) == 0 || len(candidate) > maxBytes)
+        return false;
+    if (candidate[0] == "/"[0])
+        return false;
+    var index = 0;
+    while (index < len(candidate)) {
+        var ch = candidate[index];
+        if (isControlByte(ch))
+            return false;
+        if (ch == ":"[0])
+            return false;
+        index++;
+    }
+    return true;
+}
+
+// Strip C0 controls / DEL / ESC only. Keep all printable ASCII and full UTF-8.
+fun sanitizeRemote(text) {
+    var result = "";
+    var index = 0;
+    while (index < len(text)) {
+        if (!isControlByte(text[index]))
+            result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun showHeader() {
+    if (!termInteractive())
+        return NULL;
+
+    termClear();
+    termPrint("╔════════════════════════════════════════════════════════════╗", "accent");
+    if (plaintextMode)
+        termPrint("║              CHOMPO CHAT SERVER (PLAINTEXT)                ║", "warning");
+    else
+        termPrint("║                   CHOMPO CHAT SERVER                       ║", "accent");
+    termPrint("╚════════════════════════════════════════════════════════════╝", "accent");
+    termPrint("/help  /users  /say <text>  /kick <name>  /clear  /stop", "muted");
+    termPrint("", "default");
+    return NULL;
+}
+
+fun sendChatLine(handle, text) {
+    if (plaintextMode) {
+        var sent = netSendAll(handle, text + "\n", 2000);
+        return sent[0] == "sent" || sent[0] == "ok" || (len(sent) > 0 && sent != NULL);
+    }
+    var result = netSecureSendLine(handle, text, 2000);
+    return result[0] == "sent";
+}
+
+fun receiveChatLine(handle) {
+    if (plaintextMode)
+        return netReceiveLine(handle);
+    return netSecureReceiveLine(handle);
+}
+
+fun forgetChatConnection(handle) {
+    if (!plaintextMode)
+        netSecureForget(handle);
+    return NULL;
+}
+
+fun findClient(handle) {
+    return listIndexOf(clients, handle);
+}
+
+fun findName(candidate) {
+    var index = 0;
+    while (index < len(names)) {
+        if (names[index] == candidate)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun nameTaken(candidate) {
+    return findName(candidate) >= 0;
+}
+
+fun countNamed() {
+    var count = 0;
+    var index = 0;
+    while (index < len(names)) {
+        if (names[index] != NULL)
+            count++;
+        index++;
+    }
+    return count;
+}
+
+fun isAdmin(index) {
+    if (index < 0 || index >= len(roles))
+        return false;
+    return roles[index] == "admin";
+}
+
+fun findRoom(name) {
+    return listIndexOf(roomList, name);
+}
+
+fun ensureRoom(name) {
+    var index = findRoom(name);
+    if (index >= 0)
+        return index;
+    push(roomList, name);
+    push(histories, Array{});
+    return len(roomList) - 1;
+}
+
+fun roomUserCount(roomName) {
+    var count = 0;
+    var index = 0;
+    while (index < len(rooms)) {
+        if (names[index] != NULL && rooms[index] == roomName)
+            count++;
+        index++;
+    }
+    return count;
+}
+
+fun promoteFirstAdmin() {
+    var index = 0;
+    while (index < len(roles)) {
+        if (names[index] != NULL && roles[index] == "admin")
+            return NULL;
+        index++;
+    }
+    index = 0;
+    while (index < len(names)) {
+        if (names[index] != NULL) {
+            roles[index] = "admin";
+            var notice = "* " + names[index] + " is now admin";
+            termPrint(notice, "system");
+            broadcastAll(notice);
+            if (sendChatLine(clients[index], "ROLE admin")) {
+            }
+            return NULL;
+        }
+        index++;
+    }
+    return NULL;
+}
+
+fun removeClientAt(index, announce) {
+    var handle = clients[index];
+    var name = names[index];
+    var room = rooms[index];
+    var wasAdmin = roles[index] == "admin";
+
+    forgetChatConnection(handle);
+    netClose(handle);
+    removeAt(clients, index);
+    removeAt(names, index);
+    removeAt(statuses, index);
+    removeAt(roles, index);
+    removeAt(rooms, index);
+
+    if (announce && name != NULL) {
+        var notice = "* " + name + " left #" + room;
+        termPrint(notice, "system");
+        broadcastRoom(room, notice);
+    }
+
+    if (wasAdmin)
+        promoteFirstAdmin();
+}
+
+fun removePendingAt(index) {
+    var handle = pending[index];
+    forgetChatConnection(handle);
+    netClose(handle);
+    removeAt(pending, index);
+    removeAt(pendingStarted, index);
+}
+
+fun broadcastRoom(roomName, text) {
+    var index = 0;
+    while (index < len(clients)) {
+        if (names[index] == NULL || rooms[index] != roomName) {
+            index++;
+        } else {
+            if (sendChatLine(clients[index], text)) {
+                index++;
+            } else {
+                removeClientAt(index, false);
+            }
+        }
+    }
+}
+
+fun broadcastAll(text) {
+    var index = 0;
+    while (index < len(clients)) {
+        if (names[index] == NULL) {
+            index++;
+        } else {
+            if (sendChatLine(clients[index], text)) {
+                index++;
+            } else {
+                removeClientAt(index, false);
+            }
+        }
+    }
+}
+
+fun appendHistory(roomName, text) {
+    var roomIndex = ensureRoom(roomName);
+    var history = histories[roomIndex];
+    push(history, text);
+    while (len(history) > historyLimit)
+        removeAt(history, 0);
+}
+
+fun sendHistory(handle, roomName) {
+    var roomIndex = findRoom(roomName);
+    if (roomIndex < 0)
+        roomIndex = ensureRoom(roomName);
+    var history = histories[roomIndex];
+
+    if (!sendChatLine(handle, "HISTORY " + String(len(history))))
+        return false;
+
+    for (var message in history) {
+        if (!sendChatLine(handle, message))
+            return false;
+    }
+
+    return sendChatLine(handle, "END");
+}
+
+fun sendUsers(handle) {
+    var count = 0;
+    var index = 0;
+    while (index < len(names)) {
+        if (names[index] != NULL)
+            count++;
+        index++;
+    }
+
+    if (!sendChatLine(handle, "USERS " + String(count)))
+        return false;
+
+    index = 0;
+    while (index < len(names)) {
+        if (names[index] != NULL) {
+            if (!sendChatLine(handle, "USER " + names[index] + " " + statuses[index] + " " + roles[index] + " #" + rooms[index]))
+                return false;
+        }
+        index++;
+    }
+
+    return sendChatLine(handle, "END");
+}
+
+fun validStatus(value) {
+    return value == "online" || value == "away" || value == "busy" || value == "dnd";
+}
+
+fun nameError(handle, reason) {
+    return sendChatLine(handle, "ERROR NAME " + reason);
+}
+
+fun registerName(handle, candidate) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (len(candidate) == 0) {
+        nameError(handle, "cannot be empty");
+        return true;
+    }
+    if (!isSafeName(candidate, 48)) {
+        nameError(handle, "must be 1..48 bytes, UTF-8 ok, no controls or ':'");
+        return true;
+    }
+    if (candidate in banned) {
+        nameError(handle, "is banned");
+        return true;
+    }
+    if (whitelistOn && !(candidate in whitelist)) {
+        nameError(handle, "is not on the whitelist");
+        return true;
+    }
+    if (nameTaken(candidate)) {
+        nameError(handle, "is already in use");
+        return true;
+    }
+
+    names[index] = candidate;
+    statuses[index] = "online";
+    rooms[index] = "lobby";
+    ensureRoom("lobby");
+
+    if (countNamed() == 1)
+        roles[index] = "admin";
+    else
+        roles[index] = "member";
+
+    if (!sendChatLine(handle, "OK NAME " + candidate)) {
+        removeClientAt(index, false);
+        return false;
+    }
+    if (!sendChatLine(handle, "ROLE " + roles[index])) {
+        removeClientAt(index, false);
+        return false;
+    }
+    if (!sendChatLine(handle, "ROOM lobby")) {
+        removeClientAt(index, false);
+        return false;
+    }
+    if (!sendHistory(handle, "lobby")) {
+        index = findClient(handle);
+        if (index >= 0)
+            removeClientAt(index, false);
+        return false;
+    }
+
+    var notice = "* " + candidate + " joined #lobby as " + roles[index];
+    termPrint(notice, "system");
+    broadcastRoom("lobby", notice);
+    return findClient(handle) >= 0;
+}
+
+fun updateStatus(handle, value) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (!validStatus(value))
+        return sendChatLine(handle, "ERROR status must be online, away, busy or dnd");
+
+    statuses[index] = value;
+    var notice = "* " + names[index] + " is now " + value;
+    termPrint(notice, "system");
+    broadcastAll(notice);
+    return findClient(handle) >= 0;
+}
+
+fun renameClient(handle, candidate) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (len(candidate) == 0) {
+        nameError(handle, "cannot be empty");
+        return true;
+    }
+    if (!isSafeName(candidate, 48)) {
+        nameError(handle, "must be 1..48 bytes, UTF-8 ok, no controls or ':'");
+        return true;
+    }
+    if (candidate in banned) {
+        nameError(handle, "is banned");
+        return true;
+    }
+    if (whitelistOn && !(candidate in whitelist)) {
+        nameError(handle, "is not on the whitelist");
+        return true;
+    }
+    if (nameTaken(candidate)) {
+        nameError(handle, "is already in use");
+        return true;
+    }
+
+    var oldName = names[index];
+    names[index] = candidate;
+    sendChatLine(handle, "OK NAME " + candidate);
+    var notice = "* " + oldName + " is now known as " + candidate;
+    termPrint(notice, "system");
+    broadcastAll(notice);
+    return findClient(handle) >= 0;
+}
+
+fun sendPrivate(handle, command) {
+    var separator = findChar(command, " "[0], 0);
+    if (separator < 1)
+        return sendChatLine(handle, "ERROR usage: /msg <name> <message>");
+
+    var targetName = "";
+    var index = 0;
+    while (index < separator) {
+        targetName = targetName + command[index];
+        index++;
+    }
+
+    var text = sanitizeRemote(sliceFrom(command, separator + 1));
+    if (len(text) == 0)
+        return sendChatLine(handle, "ERROR private message cannot be empty");
+
+    var senderIndex = findClient(handle);
+    var targetIndex = findName(targetName);
+    if (targetIndex < 0)
+        return sendChatLine(handle, "ERROR user is not connected");
+
+    if (!sendChatLine(clients[targetIndex], "[DM from " + names[senderIndex] + "] " + text))
+        return false;
+    return sendChatLine(handle, "[DM to " + targetName + "] " + text);
+}
+
+fun requireAdmin(index, handle) {
+    if (!isAdmin(index)) {
+        sendChatLine(handle, "ERROR admin only");
+        return false;
+    }
+    return true;
+}
+
+fun cmdRooms(handle) {
+    var body = "";
+    var index = 0;
+    while (index < len(roomList)) {
+        if (index > 0)
+            body = body + " ";
+        var name = roomList[index];
+        body = body + "#" + name + "(" + String(roomUserCount(name)) + ")";
+        index++;
+    }
+    return sendChatLine(handle, "ROOMS " + body);
+}
+
+fun cmdJoin(handle, index, roomName) {
+    if (!isSafeName(roomName, 48))
+        return sendChatLine(handle, "ERROR room name must be 1..48 bytes, UTF-8 ok, no controls or ':'");
+
+    var oldRoom = rooms[index];
+    if (oldRoom == roomName)
+        return sendChatLine(handle, "OK already in #" + roomName);
+
+    var name = names[index];
+    rooms[index] = roomName;
+    ensureRoom(roomName);
+
+    if (!sendChatLine(handle, "ROOM " + roomName))
+        return false;
+    if (!sendHistory(handle, roomName))
+        return false;
+
+    broadcastRoom(oldRoom, "* " + name + " left #" + oldRoom);
+    var joinNotice = "* " + name + " joined #" + roomName + " as " + roles[index];
+    termPrint(joinNotice, "system");
+    broadcastRoom(roomName, joinNotice);
+    return true;
+}
+
+fun cmdKick(handle, index, targetName) {
+    if (!requireAdmin(index, handle))
+        return true;
+    if (len(targetName) == 0)
+        return sendChatLine(handle, "ERROR usage: /kick <name>");
+
+    var target = findName(targetName);
+    if (target < 0)
+        return sendChatLine(handle, "ERROR user not found");
+    if (target == index)
+        return sendChatLine(handle, "ERROR cannot kick yourself");
+
+    var room = rooms[target];
+    sendChatLine(clients[target], "KICKED by " + names[index]);
+    removeClientAt(target, false);
+    var notice = "* " + targetName + " was kicked from #" + room;
+    termPrint(notice, "warning");
+    broadcastRoom(room, notice);
+    return true;
+}
+
+fun cmdBan(handle, index, targetName) {
+    if (!requireAdmin(index, handle))
+        return true;
+    if (len(targetName) == 0)
+        return sendChatLine(handle, "ERROR usage: /ban <name>");
+    if (!isSafeName(targetName, 48))
+        return sendChatLine(handle, "ERROR invalid name");
+
+    if (!(targetName in banned)) {
+        banned[targetName] = true;
+        push(bannedNames, targetName);
+    }
+
+    var target = findName(targetName);
+    if (target >= 0) {
+        var room = rooms[target];
+        sendChatLine(clients[target], "KICKED banned by " + names[index]);
+        removeClientAt(target, false);
+        broadcastRoom(room, "* " + targetName + " was banned");
+    }
+
+    if (!sendChatLine(handle, "OK banned " + targetName))
+        return false;
+    broadcastAll("* " + targetName + " is banned");
+    return true;
+}
+
+fun cmdUnban(handle, index, targetName) {
+    if (!requireAdmin(index, handle))
+        return true;
+    if (len(targetName) == 0)
+        return sendChatLine(handle, "ERROR usage: /unban <name>");
+    if (!(targetName in banned))
+        return sendChatLine(handle, "ERROR name is not banned");
+
+    removeKey(banned, targetName);
+    listRemoveItem(bannedNames, targetName);
+    if (!sendChatLine(handle, "OK unbanned " + targetName))
+        return false;
+    broadcastAll("* " + targetName + " is unbanned");
+    return true;
+}
+
+fun cmdBans(handle, index) {
+    if (!requireAdmin(index, handle))
+        return true;
+    var body = "";
+    var i = 0;
+    while (i < len(bannedNames)) {
+        if (i > 0)
+            body = body + " ";
+        body = body + bannedNames[i];
+        i++;
+    }
+    if (len(body) == 0)
+        body = "(empty)";
+    return sendChatLine(handle, "BANS " + body);
+}
+
+fun cmdWhitelist(handle, index, rest) {
+    if (!requireAdmin(index, handle))
+        return true;
+
+    var parts = splitCmd(rest);
+    var action = parts[0];
+    var arg = parts[1];
+
+    if (action == "" || action == "list") {
+        var body = "";
+        var i = 0;
+        while (i < len(whitelistNames)) {
+            if (i > 0)
+                body = body + " ";
+            body = body + whitelistNames[i];
+            i++;
+        }
+        if (len(body) == 0)
+            body = "(empty)";
+        var mode = "off";
+        if (whitelistOn)
+            mode = "on";
+        return sendChatLine(handle, "WHITELIST " + mode + " " + body);
+    }
+
+    if (action == "on") {
+        whitelistOn = true;
+        sendChatLine(handle, "OK whitelist on");
+        broadcastAll("* whitelist enabled");
+        return true;
+    }
+
+    if (action == "off") {
+        whitelistOn = false;
+        sendChatLine(handle, "OK whitelist off");
+        broadcastAll("* whitelist disabled");
+        return true;
+    }
+
+    if (action == "add") {
+        var name = splitCmd(arg)[0];
+        if (!isSafeName(name, 48))
+            return sendChatLine(handle, "ERROR usage: /whitelist add <name>");
+        if (!(name in whitelist)) {
+            whitelist[name] = true;
+            push(whitelistNames, name);
+        }
+        return sendChatLine(handle, "OK whitelist add " + name);
+    }
+
+    if (action == "remove") {
+        var removeName = splitCmd(arg)[0];
+        if (!(removeName in whitelist))
+            return sendChatLine(handle, "ERROR name not on whitelist");
+        removeKey(whitelist, removeName);
+        listRemoveItem(whitelistNames, removeName);
+        return sendChatLine(handle, "OK whitelist remove " + removeName);
+    }
+
+    return sendChatLine(handle, "ERROR usage: /whitelist on|off|add|remove|list");
+}
+
+fun handleCommand(handle, index, line) {
+    var parts = splitCmd(line);
+    var cmd = parts[0];
+    var rest = parts[1];
+
+    if (cmd == "/quit" || cmd == "/exit") {
+        sendChatLine(handle, "BYE");
+        index = findClient(handle);
+        if (index >= 0)
+            removeClientAt(index, true);
+        return false;
+    }
+
+    if (cmd == "/help") {
+        if (!sendChatLine(handle, "HELP --- chat ---"))
+            return false;
+        if (!sendChatLine(handle, "HELP /help — эта справка"))
+            return false;
+        if (!sendChatLine(handle, "HELP /history — история текущей комнаты"))
+            return false;
+        if (!sendChatLine(handle, "HELP /users — кто онлайн (имя, статус, роль, комната)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /rooms — список комнат и число участников"))
+            return false;
+        if (!sendChatLine(handle, "HELP /room — текущая комната"))
+            return false;
+        if (!sendChatLine(handle, "HELP /join <room> — перейти в комнату (создаётся при первом входе)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /status [online|away|busy|dnd] — свой статус"))
+            return false;
+        if (!sendChatLine(handle, "HELP /nick <name> — сменить ник (UTF-8, без ':')"))
+            return false;
+        if (!sendChatLine(handle, "HELP /me <action> — действие от третьего лица"))
+            return false;
+        if (!sendChatLine(handle, "HELP /msg <name> <text> — личное сообщение (/dm)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /ping — проверка связи (PONG)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /kick <name> — выгнать (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /ban <name> — забанить ник (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /unban <name> — снять бан (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /bans — список банов (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /whitelist on|off|add|remove|list — белый список (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /quit, /exit — выйти из чата"))
+            return false;
+        return sendChatLine(handle, "HELP --- end ---");
+    }
+
+    if (cmd == "/history") {
+        if (!sendHistory(handle, rooms[index])) {
+            index = findClient(handle);
+            if (index >= 0)
+                removeClientAt(index, true);
+            return false;
+        }
+        return true;
+    }
+
+    if (cmd == "/users")
+        return sendUsers(handle);
+
+    if (cmd == "/rooms")
+        return cmdRooms(handle);
+
+    if (cmd == "/room")
+        return sendChatLine(handle, "ROOM " + rooms[index]);
+
+    if (cmd == "/join") {
+        var roomName = splitCmd(rest)[0];
+        if (len(roomName) == 0)
+            return sendChatLine(handle, "ERROR usage: /join <room>");
+        if (roomName[0] == "#"[0])
+            roomName = sliceFrom(roomName, 1);
+        return cmdJoin(handle, index, roomName);
+    }
+
+    if (cmd == "/status") {
+        if (len(rest) == 0)
+            return sendChatLine(handle, "STATUS " + statuses[index]);
+        return updateStatus(handle, rest);
+    }
+
+    if (cmd == "/online")
+        return updateStatus(handle, "online");
+    if (cmd == "/away")
+        return updateStatus(handle, "away");
+    if (cmd == "/busy")
+        return updateStatus(handle, "busy");
+    if (cmd == "/dnd")
+        return updateStatus(handle, "dnd");
+
+    if (cmd == "/nick") {
+        var newName = splitCmd(rest)[0];
+        if (len(newName) == 0)
+            return sendChatLine(handle, "ERROR usage: /nick <name>");
+        return renameClient(handle, newName);
+    }
+
+    if (cmd == "/me") {
+        if (len(rest) == 0)
+            return sendChatLine(handle, "ERROR action cannot be empty");
+        var actionMessage = "* " + names[index] + " " + sanitizeRemote(rest);
+        appendHistory(rooms[index], actionMessage);
+        termPrint(actionMessage, "accent");
+        broadcastRoom(rooms[index], actionMessage);
+        return findClient(handle) >= 0;
+    }
+
+    if (cmd == "/msg" || cmd == "/dm")
+        return sendPrivate(handle, rest);
+
+    if (cmd == "/ping")
+        return sendChatLine(handle, "PONG");
+
+    if (cmd == "/kick")
+        return cmdKick(handle, index, splitCmd(rest)[0]);
+
+    if (cmd == "/ban")
+        return cmdBan(handle, index, splitCmd(rest)[0]);
+
+    if (cmd == "/unban")
+        return cmdUnban(handle, index, splitCmd(rest)[0]);
+
+    if (cmd == "/bans" || cmd == "/blacklist")
+        return cmdBans(handle, index);
+
+    if (cmd == "/whitelist")
+        return cmdWhitelist(handle, index, rest);
+
+    return sendChatLine(handle, "ERROR unknown command; use /help");
+}
+
+fun processLine(handle, line) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (names[index] == NULL)
+        return registerName(handle, line);
+
+    if (len(line) > 0 && line[0] == "/"[0])
+        return handleCommand(handle, index, line);
+
+    if (len(line) == 0)
+        return true;
+
+    if (len(line) > 4096)
+        return sendChatLine(handle, "ERROR message is too long");
+
+    var clean = sanitizeRemote(line);
+    if (len(clean) == 0)
+        return true;
+
+    var message = "[" + formatTime() + "] " + names[index] + ": " + clean;
+    appendHistory(rooms[index], message);
+    termPrint(message, "message");
+    broadcastRoom(rooms[index], message);
+    return findClient(handle) >= 0;
+}
+
+fun drainClient(handle) {
+    while (true) {
+        var packet = receiveChatLine(handle);
+
+        if (packet[0] == "wait")
+            return true;
+
+        if (packet[0] == "closed" || packet[0] == "error") {
+            if (packet[0] == "error")
+                termPrint("SECURITY rejected client packet: " + packet[1], "error");
+            var index = findClient(handle);
+            if (index >= 0)
+                removeClientAt(index, true);
+            return false;
+        }
+
+        if (packet[0] == "data") {
+            if (!processLine(handle, packet[1]))
+                return false;
+        }
+    }
+}
+
+fun promotePending(handle) {
+    push(clients, handle);
+    push(names, NULL);
+    push(statuses, "connecting");
+    push(roles, "member");
+    push(rooms, "lobby");
+
+    if (!sendChatLine(handle, "NAME choose a unique name"))
+        removeClientAt(len(clients) - 1, false);
+}
+
+fun stepPendingHandshakes() {
+    var index = 0;
+    while (index < len(pending)) {
+        var handle = pending[index];
+        var age = tickMs - pendingStarted[index];
+        if (age > HANDSHAKE_DEADLINE_MS) {
+            termPrint("SECURITY handshake timeout", "error");
+            removePendingAt(index);
+        } else {
+            var step = netSecureServerStep(handle);
+            if (step[0] == "pending") {
+                index++;
+            } else {
+                if (step[0] == "ok") {
+                    removeAt(pending, index);
+                    removeAt(pendingStarted, index);
+                    promotePending(handle);
+                } else {
+                    termPrint("SECURITY rejected connection: " + step[1], "error");
+                    removePendingAt(index);
+                }
+            }
+        }
+    }
+}
+
+fun acceptPending(listener) {
+    while (true) {
+        var client = netAccept(listener);
+        if (client == NULL)
+            return NULL;
+
+        if (plaintextMode) {
+            promotePending(client);
+        } else {
+            if (len(pending) >= MAX_PENDING) {
+                termPrint("SECURITY pending handshake limit reached", "error");
+                netClose(client);
+            } else {
+                var begin = netSecureServerBegin(client, roomPassword);
+                if (begin[0] != "ok") {
+                    termPrint("SECURITY rejected connection: " + begin[1], "error");
+                    netSecureForget(client);
+                    netClose(client);
+                } else {
+                    push(pending, client);
+                    push(pendingStarted, tickMs);
+                }
+            }
+        }
+    }
+}
+
+fun printServerUsers() {
+    termPrint("Connected users: " + String(countNamed()) + "  pending handshakes: " + String(len(pending)), "info");
+    var index = 0;
+    while (index < len(names)) {
+        if (names[index] == NULL)
+            termPrint("  <authorizing>", "muted");
+        else
+            termPrint("  " + names[index] + " [" + statuses[index] + "/" + roles[index] + "] #" + rooms[index], "message");
+        index++;
+    }
+}
+
+fun processServerCommand(line) {
+    if (len(line) == 0)
+        return true;
+
+    if (line == "/help") {
+        termPrint("SERVER --- console ---", "info");
+        termPrint("/help — эта справка", "info");
+        termPrint("/users — подключённые клиенты и pending handshake", "info");
+        termPrint("/say <text> — сообщение во все комнаты от сервера", "info");
+        termPrint("/kick <name> — отключить пользователя", "info");
+        termPrint("/clear — очистить экран консоли", "info");
+        termPrint("/stop — остановить сервер", "info");
+        return true;
+    }
+
+    if (line == "/users") {
+        printServerUsers();
+        return true;
+    }
+
+    if (line == "/clear") {
+        showHeader();
+        termSetPrompt("server › ", "warning");
+        return true;
+    }
+
+    if (startsWith(line, "/say ")) {
+        var message = "[SERVER] " + sanitizeRemote(sliceFrom(line, 5));
+        // Server say goes to all rooms' histories and all clients.
+        var r = 0;
+        while (r < len(roomList)) {
+            appendHistory(roomList[r], message);
+            r++;
+        }
+        termPrint(message, "warning");
+        broadcastAll(message);
+        return true;
+    }
+
+    if (startsWith(line, "/kick ")) {
+        var target = sliceFrom(line, 6);
+        var index = findName(target);
+        if (index < 0) {
+            termPrint("User is not connected: " + target, "error");
+            return true;
+        }
+        sendChatLine(clients[index], "KICKED by server");
+        termPrint("Kicked " + target, "warning");
+        removeClientAt(index, true);
+        return true;
+    }
+
+    if (line == "/stop")
+        return false;
+
+    termPrint("Unknown server command. Use /help.", "error");
+    return true;
+}
+
+fun closeAll(listener) {
+    broadcastAll("SERVER shutting down");
+    while (len(clients) > 0)
+        removeClientAt(0, false);
+    while (len(pending) > 0)
+        removePendingAt(0);
+    netClose(listener);
+    termSetPrompt("");
+    termClose();
+    return NULL;
+}
+
+fun main() {
+    termOpen();
+    termSetTitle("Chompo Chat Server");
+
+    if (!plaintextMode) {
+        if (roomPassword == NULL || len(roomPassword) < MIN_PASSWORD_LEN) {
+            termPrint("ERROR: provide a room password with at least " + String(MIN_PASSWORD_LEN) + " bytes.", "error");
+            termPrint("Usage: chat_server.chmp [--plaintext] <host> <port> <history> <password>", "info");
+            termClose();
+            return NULL;
+        }
+    }
+
+    var listener = netListen(bindHost, bindPort, 64);
+    if (termInteractive())
+        showHeader();
+
+    if (plaintextMode)
+        termPrint("LISTENING " + String(netPort(listener)) + " PLAINTEXT", "warning");
+    else
+        termPrint("LISTENING " + String(netPort(listener)) + " SECURE AES-256-GCM", "success");
+
+    termSetPrompt("server › ", "warning");
+
+    var running = true;
+    while (running) {
+        var watched = Array{listener};
+        for (var client in clients)
+            push(watched, client);
+        for (var p in pending)
+            push(watched, p);
+
+        var ready = netPoll(watched, 25);
+        tickMs = tickMs + 25;
+
+        var acceptReady = false;
+        for (var handle in ready) {
+            if (handle == listener)
+                acceptReady = true;
+        }
+        if (acceptReady)
+            acceptPending(listener);
+
+        // Always step handshakes and drain clients. Buffered lines may already be
+        // in NetworkManager while the socket is no longer reported readable.
+        if (!plaintextMode)
+            stepPendingHandshakes();
+
+        var clientIndex = 0;
+        while (clientIndex < len(clients)) {
+            if (drainClient(clients[clientIndex]))
+                clientIndex++;
+            // drainClient removes the client on failure and shifts arrays.
+        }
+
+        var console = termPoll(0);
+        if (console[0] == "data")
+            running = processServerCommand(console[1]);
+    }
+
+    return closeAll(listener);
+}
+
+main();

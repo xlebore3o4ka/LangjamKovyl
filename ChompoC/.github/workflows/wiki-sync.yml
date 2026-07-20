@@ -1,0 +1,70 @@
+name: Sync GitHub Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/wiki/**"
+      - ".github/workflows/wiki-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-wiki-sync-origin-main
+  cancel-in-progress: true
+
+jobs:
+  sync-wiki:
+    name: origin/main docs/wiki -> GitHub Wiki
+    if: github.repository == 'Bony-Lord/ChompoC' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout origin/main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Validate Wiki source
+        shell: bash
+        run: |
+          test -f docs/wiki/Home.md
+          test -f docs/wiki/_Sidebar.md
+
+      - name: Clone GitHub Wiki repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git clone "https://x-access-token:${GH_TOKEN}@github.com/Bony-Lord/ChompoC.wiki.git" wiki; then
+            echo "::error::GitHub Wiki is not initialized. Enable Wikis and create the first Home page, then rerun this workflow from main."
+            exit 1
+          fi
+
+      - name: Synchronize pages
+        shell: bash
+        run: |
+          rsync -a --delete --exclude='.git/' docs/wiki/ wiki/
+
+      - name: Commit and push Wiki changes
+        shell: bash
+        working-directory: wiki
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "GitHub Wiki is already synchronized with origin/main."
+            exit 0
+          fi
+
+          git commit -m "Sync docs/wiki from origin/main ${SOURCE_SHA}"
+          git push origin HEAD

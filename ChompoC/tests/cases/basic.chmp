@@ -1,0 +1,4 @@
+print(1 + 2, "\n");
+print(true + 5, "\n");
+print("value = " + 10, "\n");
+print(Int("42"), "\n");
