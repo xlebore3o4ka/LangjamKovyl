@@ -1,4 +1,4 @@
 pub fn clear_screen(client) {
     print("User console cleared!")
-    gen_tcp.send(client, "\e[2J\e[H")
+    gen_tcp.send(client, "\e[r\e[2J\e[H")
 }
