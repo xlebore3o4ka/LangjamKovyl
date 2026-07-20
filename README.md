@@ -1,150 +1,103 @@
-# KOVYL
+# plic (langjam)
+## Цель
 
-**KOVYL** is a statically typed programming language with manual memory management.
+Разработать язык программирования и реализовать на нём многопользовательский чат.
 
-The language emphasizes explicitness of operations — with no hidden runtime behavior or garbage collector.
+---
 
-KOVYL offers a rich type system, functions as first-class objects, array operations, as well as utilities for string manipulation and formatting. Both procedural and functional programming paradigms are supported.
+## Что нужно сделать
 
-The language syntax is designed to be readable and unambiguous.
+### 1. Язык программирования
+- Придумать синтаксис и семантику
+- Написать компилятор или интерпретатор
+- Обеспечить работу на выбранной платформе
 
-**Syntax example:**
+### 2. Проект на этом языке — Чат-комната
+- Пользователи могут подключаться к чату
+- Отправлять сообщения всем участникам
+- Видеть историю сообщений
+- Выходить из чата
 
-```kovyl
-func char[*] greeting(char[32] name) do 
-  return fmt:("Hello from Kovyl, ", name, "!")
-end
+---
 
-char[32][] names = {"Alice", "Ben", "John"}
+## Технические требования
 
-for name = names do
-  print:(greeting(name), free=true)
-end
-```
+### Платформа
+- **Приоритет** — AtomVM (Erlang-совместимая виртуальная машина): https://atomvm.org/
+- Допустимы альтернативы (JVM, .NET, CPython, собственная VM и т.д.)
 
-**Chat for LangJam**
+### Язык должен поддерживать
+- Переменные и типы данных
+- Условные конструкции
+- Циклы или рекурсию
+- Функции/процедуры
+- Работу с коллекциями (списки, массивы, словари)
 
-```kovyl
-func clear() do
-  # "Чистит" консоль
-  int i = 0
-  while i < 100 do 
-    print:(fmt:"")
-    i = i + 1 
-  end
-end
+Дополнительные фишки будут плюсом
 
-func help() do
-  print:fmt:"Доступные команды:"
-  print:fmt:"  /stop     - остановка работы чата"
-  print:fmt:"  /help     - справка"
-  print:fmt:"  /members  - список участников"
-  print:fmt:"  /add      - добавить участника"
-  print:fmt:"  /remove   - удалить участника"
-  print:fmt:"  /behalf   - переключаться между участниками"
-end
+### Чат должен поддерживать
+- Добавление пользователя
+- Отправка сообщения всем участникам
+- Просмотр последних N сообщений (история)
+- Удаление пользователя (выход из чата)
 
-func char[*] input(char[*] prompt) do
-  print:(prompt, term="")
-  return read:()
-end
+---
 
-func int index(char[*][*] array, char[*] str) do
-  int idx = 0
-  for el = array do
-    if el == str do return idx end
-    idx = idx + 1
-  end
-  return -1
-end
+## Критерии оценки
 
-print:fmt:"\nДобро пожаловать в чат\n#! KovylCHAT !#\n"
-help()
+| Критерий | Баллы | Описание |
+|----------|-------|----------|
+| Работоспособность | 5 | Код запускается и выполняет базовые функции чата |
+| Дизайн языка | 5 | Синтаксис логичен, выразителен, удобен |
+| Архитектура | 5 | Использование процессов/акторов, продуманность структуры |
+| Качество кода | 3 | Читаемость, обработка ошибок |
+| Креативность | 2 | Нестандартные решения, дополнительные фичи |
 
-char[*] current = arr:"Admin"
-char[*][*] members = arr:{current};
-(char[*] name, char[*] message)[*] history = arr:{(
-	name = arr:"System", 
-	message = arr:"Chat opened!"
-)}
+**Максимальный балл:** 20
 
-while true do
-  char[*] msg = input(fmt:('\n', current, " > "))
+---
 
-  clear()
+## Дополнительные возможности (приветствуются)
 
-  for data = history do
-  	print:fmt:(data.name, ": ", data.message)
-  end
+- Комнаты / приватные сообщения
+- Таймстемпы сообщений
+- Имена пользователей
+- Сохранение истории между сессиями
+- Визуальный интерфейс (консольный или графический)
+- Команды (/help, /kick, /clear)
+- Авторизация пользователей
 
-  print:fmt:("\n", current, " > ", msg)
+---
 
-  if msg == "/stop" do break
+## Требования к сдаче
 
-  elif msg == "/help" do 
-  	help()
+- [ ] Исходный код языка (компилятор/интерпретатор)
+- [ ] Исходный код чата на этом языке
+- [ ] Инструкция по запуску (1–2 абзаца)
+- [ ] Краткое описание языка (синтаксис, особенности)
 
-  elif msg == "/members" do 
-    for member = members do
-      print:fmt:("- ", member)
-    end
+---
 
-  elif msg == "/add" do 
-	  char[*] name = input(fmt:"  name > ")
-	  
-	  if name == "System" do
-	    print:fmt:"  Error: 'System' is a reserved name"
-	    continue
-	  end
-	  
-	  if index(members, name) != -1 do
-	    print:fmt:("  Error: member '", name, "' already exists")
-	    continue
-	  end
-	  
-	  int last = len:(members)
-	  resize:(members, last + 1)
-	  members[last] = name
+## Как сдавать
+Форкайте репозиторий -> добавляете директорию с названием вашего языка и выгружаете в нее проект -> делаете pull request
 
-  elif msg == "/remove" do
-    char[*] name = input(fmt:"  name > ")
-    int idx = index(members, name)
-    
-    if idx == -1 do
-      print:fmt:"  Error: unknown member"
-      continue
-    end
-    
-    int i = idx
-    while i < len:(members) - 1 do
-      members[i] = members[i + 1]
-      i = i + 1
-    end
-    
-    resize:(members, len:(members) - 1)
-    
-    if current == name do
-      current = members[0]
-    end
 
-  elif msg == "/behalf" do 
-  	char[*] name = input(fmt:"  name > ")
+## Дедлайн
 
-  	if index(members, name) == -1 do
-  	  print:fmt:"  Error: unknown member"
-      continue
-  	end
+**Дата и время:** 20 июля
 
-  	current = name
-  else do
-  	int last = len:(history)
-  	resize:(history, last + 1)
-  	history[last] = (name = current, message = msg)
-  end
-end
-```
+---
 
-**Run**
-`nimble run -- chat.kvl`
+## Приз
 
-Yep, you need nim for this🤗
+5000 RUB
+
+---
+
+## Контакты
+
+По всем вопросам: @k1ngmang (telegram)
+
+---
+
+**Удачи!**
