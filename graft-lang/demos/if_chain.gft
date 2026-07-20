@@ -1,0 +1,18 @@
+use std.io
+
+fn main() {
+    let x = 10
+    if x > 5 {
+        io.println("big")
+    } else {
+        io.println("small")
+    }
+
+    if x == 10 {
+        io.println("exactly ten")
+    }
+
+    if x > 5 {
+        io.println("confirmed big")
+    }
+}

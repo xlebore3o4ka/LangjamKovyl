@@ -1,0 +1,25 @@
+use std.io
+
+fn add(a, b) {
+    return a + b
+}
+
+fn mul(a, b) {
+    return a * b
+}
+
+fn compute(a, b) {
+    let sum = add(a, b)
+    let product = mul(a, b)
+    io.print("sum=")
+    io.print(sum)
+    io.print(" product=")
+    io.println(product)
+    return sum + product
+}
+
+fn main() {
+    let result = compute(3, 4)
+    io.print("result=")
+    io.println(result)
+}

@@ -1,0 +1,13 @@
+use std.io
+
+actor Echo {
+    msg ping(data) {
+        return data
+    }
+}
+
+fn main() {
+    let e = Echo.spawn()
+    let result = e.ping("hello")
+    io.println(result)
+}

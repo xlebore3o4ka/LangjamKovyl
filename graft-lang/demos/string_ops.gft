@@ -1,0 +1,23 @@
+use std.io
+
+fn greet(name) {
+    return "Hello, " ++ name ++ "!"
+}
+
+fn main() {
+    let greeting = greet("World")
+    io.println(greeting)
+
+    let a = "foo"
+    let b = "bar"
+    let c = a ++ b
+    io.println(c)
+
+    let len = string.len(c)
+    io.print("length=")
+    io.println(len)
+
+    if c == "foobar" {
+        io.println("match")
+    }
+}

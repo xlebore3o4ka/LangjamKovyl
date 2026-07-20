@@ -1,0 +1,7 @@
+use std.io
+
+fn main() {
+    io.print("Enter name: ")
+    let name = io.getLine()
+    io.println("Hello, " ++ name ++ "!")
+}

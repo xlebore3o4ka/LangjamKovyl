@@ -1,0 +1,10 @@
+use std.io
+
+fn main() {
+    let x = 10
+    if x > 5 {
+        io.println("big")
+    } else {
+        io.println("small")
+    }
+}
