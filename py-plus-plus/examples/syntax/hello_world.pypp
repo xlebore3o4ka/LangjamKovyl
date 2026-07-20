@@ -1,0 +1,8 @@
+## Hello world example for Py++
+
+print("Hello, Py++!");
+
+## A simple expression and assignment
+x = 10;
+y = x * 2;
+print("x * 2 =", y);

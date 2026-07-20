@@ -1,0 +1,21 @@
+## Example showing classes, inheritance, and when hooks
+
+class Counter {
+    value = 0;
+
+    when value(new_value) {
+        ## Keep the counter non-negative
+        if (new_value < 0) {
+            raise ValueError("Value cannot be negative");
+        }
+        value = new_value;
+    }
+
+    func increment() {
+        value = value + 1;
+    }
+}
+
+counter = Counter();
+counter.increment();
+print("counter.value =", counter.value);

@@ -1,0 +1,76 @@
+%YAML 1.2
+---
+name: Py++
+file_extensions:
+  - pypp
+scope: source.pyplusplus
+contexts:
+  main:
+    - match: '#\*'
+      scope: comment.block.pyplusplus
+      push: block-comment
+    - match: '##.*$'
+      scope: comment.line.double-pound.pyplusplus
+    - match: '\b(macro|func|class|when|use|from|as|extends|if|elif|else|while|for|in|match|case|return|pass|with|break|continue|assert|raise|try|except|finally|del|global|nonlocal|async|await|True|False|None)\b'
+      scope: keyword.control.pyplusplus
+    - match: '\b(Identifier|Expr|Stmt|Code|Any|int|str|float|bool|list|dict|set|tuple)\b'
+      scope: storage.type.pyplusplus
+    - match: '@[A-Za-z_]\w*'
+      scope: entity.name.function.decorator.pyplusplus
+    - match: '\$[A-Za-z_]\w*'
+      scope: variable.parameter.macro.pyplusplus
+    - match: '\bmacro\s+([A-Za-z_]\w*)'
+      captures:
+        1: entity.name.function.macro.pyplusplus
+    - match: '\bfunc\s+([A-Za-z_]\w*)'
+      captures:
+        1: entity.name.function.pyplusplus
+    - match: '\bclass\s+([A-Za-z_]\w*)'
+      captures:
+        1: entity.name.class.pyplusplus
+    - match: '\bfrom\b\s*"[^"]*"\s*use\b'
+      scope: keyword.control.import.pyplusplus
+    - match: '\buse\b\s*"[^"]*"'
+      scope: keyword.control.import.pyplusplus
+    - match: '\buse\b\s+[A-Za-z_]\w*'
+      scope: keyword.control.import.pyplusplus
+    - match: '\b(from|use|as)\b'
+      scope: keyword.control.import.pyplusplus
+    - match: '(?:[+-]?\b\d+\.\d+|[+-]?\b\d+\b)'
+      scope: constant.numeric.pyplusplus
+    - match: '\b0x[0-9A-Fa-f]+\b'
+      scope: constant.numeric.hex.pyplusplus
+    - match: '(?i)(?:r|u|b|f|rb|br|fr|rf)?("""|\'\'\'|"|\')'
+      captures:
+        1: punctuation.definition.string.begin.pyplusplus
+      push: string
+    - match: '\b[A-Za-z_]\w*\b'
+      scope: variable.other.pyplusplus
+    - match: '[{}()\[\];,:.]'
+      scope: punctuation.separator.pyplusplus
+    - match: '==|!=|<=|>=|<<|>>|\+\+|--|\+=|-=|\*=|/=|%=|&=|\|=|\^=|->|&&|\|\||\*\*|//|\+|-|\*|/|%|<|>|=|&|\||\^|~|!|:'
+      scope: keyword.operator.pyplusplus
+
+  block-comment:
+    - meta_scope: comment.block.pyplusplus
+    - match: '\*#'
+      pop: true
+    - match: '\n'
+      scope: punctuation.separator.newline.comment.block.pyplusplus
+    - match: '.'
+      scope: comment.block.pyplusplus
+
+  string:
+    - match: '(?:(?:[^\\\"]|\\.)+)'
+      scope: string.quoted.double.pyplusplus
+    - match: '\\.'
+      scope: constant.character.escape.pyplusplus
+    - match: '"'
+      scope: punctuation.definition.string.end.pyplusplus
+      pop: true
+    - match: "'"
+      scope: punctuation.definition.string.end.pyplusplus
+      pop: true
+    - match: '\n'
+      scope: invalid.illegal.newline.string.pyplusplus
+      pop: true

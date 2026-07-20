@@ -1,0 +1,171 @@
+## Flask-based chat room example in Py++.
+## Uses Flask to build a real HTTP chat application.
+
+from "flask" use "Flask" as Flask, "request" as request, "render_template_string" as render_template_string, "session" as session;
+use sys;
+use uuid as uuid;
+
+messages = [];
+tab_keys = [];
+tab_names = [];
+
+chat_template = """
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Py++ Flask Chat</title>
+    <script>
+      function generateTabId() {
+        return Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+      }
+      function ensureTabId() {
+        let tabId = sessionStorage.getItem('pypp_chat_tab_id');
+        if (!tabId) {
+          tabId = generateTabId();
+          sessionStorage.setItem('pypp_chat_tab_id', tabId);
+        }
+        const tabInput = document.getElementById('tab_id');
+        if (tabInput) {
+          tabInput.value = tabId;
+        }
+      }
+      async function refreshMessages() {
+        const response = await fetch('/history');
+        const text = await response.text();
+        document.getElementById('messageHistory').textContent = text;
+      }
+      setInterval(refreshMessages, 3000);
+      window.addEventListener('load', () => {
+        ensureTabId();
+        refreshMessages();
+      });
+    </script>
+  </head>
+  <body>
+    <h1>Py++ Flask Chat Room</h1>
+    {% if error %}
+      <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    <form method="post">
+      <label for="name">Name:</label>
+      <input id="name" name="name" value="{{ name }}" required />
+      <input type="hidden" id="tab_id" name="tab_id" value="" />
+      <br />
+      <label for="message">Message:</label>
+      <input id="message" name="message" value="" />
+      <button type="submit" name="action" value="send">Send</button>
+      <button type="submit" name="action" value="leave">Leave Chat</button>
+    </form>
+    <h2>History</h2>
+    <div id="messageHistory" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; max-height: 300px; overflow-y: auto;">
+      {% for msg in messages %}
+        {{ msg }}
+      {% endfor %}
+    </div>
+  </body>
+</html>
+""";
+
+app = Flask(__name__);
+app.secret_key = "supersecretkey";
+
+@app.route("/", methods=["GET", "POST"])
+func index() {
+    global messages;
+    global tab_keys;
+    global tab_names;
+    error = "";
+    client_id = session.get("client_id");
+    if client_id is None {
+        client_id = uuid.uuid4().hex;
+        session["client_id"] = client_id;
+    }
+    name = "Guest";
+    tab_id = request.form.get("tab_id", "");
+    tab_key = client_id;
+    if (tab_id != "") {
+        tab_key = client_id + ":" + tab_id;
+    }
+    if tab_key in tab_keys {
+        idx = tab_keys.index(tab_key);
+        name = tab_names[idx];
+    }
+    if (request.method == "POST") {
+        submitted_name = request.form.get("name", "Guest");
+        action = request.form.get("action", "send");
+        if (action == "send") {
+            if (submitted_name == "Guest" || submitted_name == "") {
+                error = "Please choose a display name before sending messages.";
+            } else {
+                duplicate = False;
+                for (i in range(len(tab_names))) {
+                    if (tab_names[i] == submitted_name && tab_keys[i] != tab_key) {
+                        duplicate = True;
+                        break;
+                    }
+                }
+                if (duplicate) {
+                    error = "That name is already taken. Choose another.";
+                } else {
+                    if (not tab_key in tab_keys) {
+                        tab_keys.append(tab_key);
+                        tab_names.append(submitted_name);
+                        messages.append(f"{submitted_name} joined the chat.");
+                    } else {
+                        idx = tab_keys.index(tab_key);
+                        if (tab_names[idx] != submitted_name) {
+                            tab_names[idx] = submitted_name;
+                        }
+                    }
+                    session["name"] = submitted_name;
+                    name = submitted_name;
+                    text = request.form.get("message", "");
+                    if (text != "") {
+                        entry = f"{submitted_name}: {text}";
+                        messages.append(entry);
+                    }
+                }
+            }
+        } elif (action == "leave") {
+            if (tab_key in tab_keys) {
+                idx = tab_keys.index(tab_key);
+                left_name = tab_names[idx];
+                old_tab_keys = tab_keys;
+                old_tab_names = tab_names;
+                tab_keys = [key for i, key in enumerate(old_tab_keys) if (old_tab_keys[i] != tab_key)];
+                tab_names = [n for i, n in enumerate(old_tab_names) if (old_tab_keys[i] != tab_key)];
+                messages.append(f"{left_name} left the chat.");
+                session.pop("client_id", None);
+                name = left_name;
+            } else {
+                error = "You are not currently in the chat.";
+            }
+            return render_template_string("""
+                <!doctype html>
+                <html lang="en">
+                  <head><meta charset="utf-8"><title>Left chat</title></head>
+                  <body>
+                    <p>{{ name }} has left the chat.</p>
+                    <a href=\"/\">Return to chat</a>
+                  </body>
+                </html>
+            """, name=name);
+        }
+    }
+    return render_template_string(chat_template, name=name, messages=messages, error=error);
+}
+
+@app.route("/history")
+func history() {
+    return "\n".join(messages);
+}
+
+if (__name__ == "__main__") {
+    try {
+        app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False);
+    } except KeyboardInterrupt {
+        print("Shutting down chat server...");
+        sys.exit(0);
+    }
+}

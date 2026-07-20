@@ -1,0 +1,5 @@
+## Example module file for imports
+
+func greet(name) {
+    return "Hello, " + name;
+}

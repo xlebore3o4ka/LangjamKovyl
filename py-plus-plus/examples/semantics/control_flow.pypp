@@ -1,0 +1,86 @@
+## Control flow example with if/elif/else, while/else, for/else, match, try/finally, and f-strings
+
+x = 5;
+
+if (x > 10) {
+    print("greater than ten");
+} elif (x > 0) {
+    print("positive and at most ten");
+} else {
+    print("non-positive");
+}
+
+sum = 0;
+while (x > 0) {
+    sum = sum + x;
+    x = x - 1;
+} else {
+    ## Executes when the while loop finishes normally without break.
+    print(`"finished while loop"`);
+}
+print(`"sum 1..5 = {sum}"`);
+
+for (i in [1, 2, 3]) {
+    if (i == 2) {
+        print(`"found {i}"`);
+        continue;
+    }
+    print(`"for item = {i}"`);
+} else {
+    ## Executes only if the for loop did not break.
+    print("for loop completed normally");
+}
+
+value = 3;
+match (value) {
+    case 1:
+        print("one");
+    case 2:
+        print("two");
+    case 3:
+        print(`"three"`);
+    case _:
+        print("other");
+}
+
+try {
+    x = 10 / 2;
+    print(`"division result = {x}"`);
+} except ZeroDivisionError as err {
+    print(`"error: {err}"`);
+} else {
+    print("no exception occurred");
+} finally {
+    print("cleanup in finally block");
+}
+
+## Lambda-style functions
+
+square = func(x) {
+    return x * x;
+};
+print(`"square(6) = {square(6)}"`);
+
+make_adder = func(x) {
+    return func(y) {
+        return x + y;
+    };
+};
+print(`"add 10 + 5 = {make_adder(10)(5)}"`);
+
+## Inheritance example
+
+class Animal {
+    func speak() {
+        print("animal sound");
+    }
+}
+
+class Dog extends Animal {
+    func speak() {
+        print("woof");
+    }
+}
+
+dog = Dog();
+dog.speak();

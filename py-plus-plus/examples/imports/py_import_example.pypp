@@ -1,0 +1,5 @@
+## Example showing import of a Python `.py` file
+
+use "module_example_py.py" as py_module;
+
+print(py_module.greet("Py++ from .py import"));

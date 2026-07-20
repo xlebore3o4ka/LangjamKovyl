@@ -1,0 +1,79 @@
+## Standard library helpers for Py++.
+## Includes macros and runtime helpers for executing Python and Py++ source.
+
+macro swap[a: Identifier, b: Identifier] {
+    __pyplusplus_swap_macro_temp = a;
+    a = b;
+    b = __pyplusplus_swap_macro_temp;
+}
+
+macro print_items[arg: Expr] {
+    for (item in arg) {
+        print(item);
+    }
+}
+
+use sys;
+use subprocess;
+use pathlib;
+use tempfile;
+use pyplusplus.parser as parser;
+use pyplusplus.compiler as compiler;
+
+## Execute a Python source string in a temporary file.
+func run_python_source(source: str) -> int {
+    temp_dir = pathlib.Path(tempfile.mkdtemp());
+    source_path = temp_dir / "temp_python_source.py";
+    source_path.write_text(source, encoding="utf-8");
+    result = subprocess.run([sys.executable, str(source_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True);
+    if result.stdout != "" {
+        print(result.stdout);
+    }
+    if result.stderr != "" {
+        print(result.stderr);
+    }
+    return result.returncode;
+}
+
+## Execute a Python source string in the current interpreter like Python's exec().
+func exec_python(source: str, globals: object | None = None, locals: object | None = None) {
+    if globals is None {
+        globals = {};
+    }
+    if locals is None {
+        locals = globals;
+    }
+    compiled = compile(source, "<string>", "exec");
+    exec(compiled, globals, locals);
+}
+
+## Execute a Py++ source string in the current interpreter like Python's exec().
+func exec_pypp(source: str, globals: object | None = None, locals: object | None = None) {
+    if globals is None {
+        globals = {"__name__": "__main__"};
+    } else {
+        globals.setdefault("__name__", "__main__");
+    }
+    if locals is None {
+        locals = globals;
+    }
+    source_ast = parser.parse_pyplusplus(source);
+    compiled_ast = compiler.compile_pyplusplus_to_python_ast(source_ast, source_path=None);
+    code_obj = compile(compiled_ast, "<string>", "exec", dont_inherit=True);
+    exec(code_obj, globals, locals);
+}
+
+## Execute a Py++ source string by writing it to a temporary .pypp file.
+func run_pypp_source(source: str) -> int {
+    temp_dir = pathlib.Path(tempfile.mkdtemp());
+    source_path = temp_dir / "temp_pypp_source.pypp";
+    source_path.write_text(source, encoding="utf-8");
+    result = subprocess.run([sys.executable, "-m", "pyplusplus.cli", str(source_path), "--run"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True);
+    if result.stdout != "" {
+        print(result.stdout);
+    }
+    if result.stderr != "" {
+        print(result.stderr);
+    }
+    return result.returncode;
+}

@@ -1,0 +1,8 @@
+## Example showing use import syntax
+
+## Use a string path and alias the module as `file`.
+## This is helpful when the module name might clash with a Py++ keyword.
+use "module_example.pypp" as file;
+
+message = file.greet("Py++ user");
+print(message);

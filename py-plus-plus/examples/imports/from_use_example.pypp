@@ -1,0 +1,6 @@
+## Example showing from use import syntax with string names and aliasing
+
+## Import the string name "greet" and alias it to avoid keyword conflicts.
+from "module_example.pypp" use "greet" as function;
+
+print(function("from import"));

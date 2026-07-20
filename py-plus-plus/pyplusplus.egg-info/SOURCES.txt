@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+pyplusplus/__init__.py
+pyplusplus/ast_nodes.py
+pyplusplus/cli.py
+pyplusplus/compiler.py
+pyplusplus/lexer.py
+pyplusplus/parser.py
+pyplusplus.egg-info/PKG-INFO
+pyplusplus.egg-info/SOURCES.txt
+pyplusplus.egg-info/dependency_links.txt
+pyplusplus.egg-info/entry_points.txt
+pyplusplus.egg-info/requires.txt
+pyplusplus.egg-info/top_level.txt
+tests/test_parser.py

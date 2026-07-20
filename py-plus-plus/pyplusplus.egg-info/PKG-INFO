@@ -1,0 +1,46 @@
+Metadata-Version: 2.4
+Name: pyplusplus
+Version: 0.1.0
+Summary: Py++ language toolkit that parses code into Python AST.
+Keywords: pyplusplus,language,parser,python-ast
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Provides-Extra: test
+Requires-Dist: pytest>=8.0; extra == "test"
+
+# Py++
+
+Py++ is a small programming language project built on top of Python. The language is designed to be parsed into Python AST for later transformation, analysis, or execution.
+
+## Структура
+
+- `pyplusplus/` — пакет языка
+- `pyplusplus/parser.py` — модуль разбора исходного кода
+- `pyplusplus/compiler.py` — модуль компиляции в AST Python
+- `pyplusplus/cli.py` — командная строка для быстрого запуска
+- `tests/` — базовые тесты
+
+## Быстрый старт
+
+1. Установите зависимости разработки:
+
+```bash
+python -m pip install -U pip
+python -m pip install -e .[test]
+```
+
+2. Запустите тесты:
+
+```bash
+pytest
+```
+
+3. Используйте CLI:
+
+```bash
+pypp examples/example.py
+```

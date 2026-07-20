@@ -1,0 +1,6 @@
+## Example showing import of a compiled Python `.pyc` file
+
+## Use a .pyc file path to import the compiled module directly.
+use "module_example_py.pyc" as pyc_module;
+
+print(pyc_module.greet("Py++ from .pyc import"));

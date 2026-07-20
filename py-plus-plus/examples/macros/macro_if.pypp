@@ -1,0 +1,10 @@
+## Macro example with expression and identifier parameters
+
+macro printer_if[var: Identifier, expected: Expr, text: Expr] {
+    if (var == expected) {
+        print(text);
+    }
+}
+
+x = 1;
+$printer_if[x, 1, "x equals 1"];

@@ -1,0 +1,2 @@
+[console_scripts]
+pypp = pyplusplus.cli:main

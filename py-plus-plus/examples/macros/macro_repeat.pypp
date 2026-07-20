@@ -1,0 +1,10 @@
+## Macro example demonstrating compile-time macro expansion
+
+macro repeat[code: Code] {
+    ## Expand the provided block twice.
+    code;
+    code;
+}
+
+## Use the macro with a code block argument.
+$repeat[{ print("This line appears twice"); }];
