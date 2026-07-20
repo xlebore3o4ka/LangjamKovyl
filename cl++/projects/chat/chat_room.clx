@@ -5,6 +5,10 @@ import "menu"
 pub fn chat_room(client, db, my_nick, target_nick) {
     clear_screen.clear_screen(client)
 
+    load_chat_history(client, db, my_nick, target_nick)
+
+    gen_tcp.send(client, unicode.characters_to_binary("[ " ++ "Вы вошли в чат с " ++ target_nick ++ " | " ++ "/exit - чтоб выйти с чата " ++ "| " ++ "Приятного общения!:)" ++ " ]\n"))
+
     return chat_receive_loop(client, db, my_nick, target_nick)
 }
 
@@ -45,6 +49,82 @@ fn chat_receive_loop(client, db, my_nick, target_nick) {
 
         (:tcp_closed, _client) -> {
             return exit(:normal)
+        }
+    }
+}
+
+fn load_chat_history(client, db, my_nick, target_nick) {
+    var chat_key = get_private_key(my_nick, target_nick)
+
+    var lrange = "LRANGE " ++ chat_key ++ " 0 -1\r\n"
+    gen_tcp.send(db, unicode.characters_to_binary(lrange))
+
+    var response = recv_all_redis(db, "")
+
+    var lines = string.split(response, "\r\n", :all)
+
+    for (line in lines) {
+        if (line ~= "") {
+            var decoded = unicode.characters_to_list(list_to_binary(line))
+
+            var clean_line = fn() {
+                var tr_tag = try decoded[1]
+                if (tr_tag[1] == :ok) {
+                    var tag = tr_tag[2]
+
+                    if (tag == :incomplete) {
+                        return decoded[2]
+                    } else if (tag == :error) {
+                        return line
+                    }
+                }
+                return decoded
+            }()
+
+            var tr_char = try clean_line[1]
+
+            if (tr_char[1] == :ok) {
+                var first_char = tr_char[2]
+
+                if (first_char ~= 36 and first_char ~= 42) {
+                    gen_tcp.send(client, unicode.characters_to_binary(clean_line ++ "\n"))
+                }
+            }
+        }
+    }
+}
+
+fn recv_all_redis(db, current_str) {
+    var lines = string.split(current_str, "\r\n", :all)
+    var current_lines_count = erlang.length(lines)
+
+    if (current_lines_count < 2) {
+        var recv_res = gen_tcp.recv(db, 0)
+
+        if (recv_res[1] == :ok) {
+            var chunk = binary_to_list(recv_res[2])
+            return recv_all_redis(db, current_str ++ chunk)
+        } else {
+            return current_str
+        }
+    } else {
+        var first_line = lines[1]
+        var raw_count = lists.nthtail(1, first_line)
+        var expected_count = list_to_integer(raw_count)
+
+        var expected_lines_count = (expected_count + expected_count) + 2
+
+        if (current_lines_count < expected_lines_count) {
+            var recv_res = gen_tcp.recv(db, 0)
+
+            if (recv_res[1] == :ok) {
+                var chunk = binary_to_list(recv_res[2])
+                return recv_all_redis(db, current_str ++ chunk)
+            } else {
+                return current_str
+            }
+        } else {
+            return current_str
         }
     }
 }

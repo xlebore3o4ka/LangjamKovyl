@@ -10,6 +10,8 @@
 chat_room(Client,Db,My_nick,Target_nick) ->
     try
         clear_screen:clear_screen(Client),
+    load_chat_history(Client, Db, My_nick, Target_nick),
+    gen_tcp:send(Client, unicode:characters_to_binary("[ " ++ "Вы вошли в чат с " ++ Target_nick ++ " | " ++ "/exit - чтоб выйти с чата " ++ "| " ++ "Приятного общения!:)" ++ " ]\n")),
     throw({'__clx_return', chat_receive_loop(Client, Db, My_nick, Target_nick)})
     catch
         throw:{'__clx_return', ReturnValue} -> 
@@ -51,6 +53,103 @@ end,
         throw({'__clx_return', chat_receive_loop(Client, Db, My_nick, Target_nick)});
     {tcp_closed, _client} ->
         throw({'__clx_return', exit(normal)})
+end
+    catch
+        throw:{'__clx_return', ReturnValue} -> 
+        ReturnValue
+    end.
+
+load_chat_history(Client,Db,My_nick,Target_nick) ->
+    try
+        Chat_key = get_private_key(My_nick, Target_nick),
+    Lrange = "LRANGE " ++ Chat_key ++ " 0 -1\r\n",
+    gen_tcp:send(Db, unicode:characters_to_binary(Lrange)),
+    Response = recv_all_redis(Db, ""),
+    Lines = string:split(Response, "\r\n", all),
+    lists:foreach(fun(Line) ->
+    case clx_std:to_boolean(Line /= "") of
+    true -> 
+        Decoded = unicode:characters_to_list(list_to_binary(Line)),
+    Clean_line = fun() ->
+    try
+        Tr_tag = try clx_std:get_element(Decoded, 1) of __TryRes -> {ok, __TryRes} catch _:__TryErr -> {error, __TryErr} end,
+        case clx_std:to_boolean(clx_std:get_element(Tr_tag, 1) == ok) of
+    true -> 
+        Tag = clx_std:get_element(Tr_tag, 2),
+    case clx_std:to_boolean(Tag == incomplete) of
+    true -> 
+        throw({'__clx_return', clx_std:get_element(Decoded, 2)});
+    _ ->
+        case clx_std:to_boolean(Tag == error) of
+    true -> 
+        throw({'__clx_return', Line});
+    _ ->
+        ok
+end
+end;
+    _ ->
+        ok
+end,
+        throw({'__clx_return', Decoded})
+    catch
+        throw:{'__clx_return', AnonymReturnValue} -> 
+        AnonymReturnValue
+        end
+    end(),
+    Tr_char = try clx_std:get_element(Clean_line, 1) of __TryRes -> {ok, __TryRes} catch _:__TryErr -> {error, __TryErr} end,
+    case clx_std:to_boolean(clx_std:get_element(Tr_char, 1) == ok) of
+    true -> 
+        First_char = clx_std:get_element(Tr_char, 2),
+    case clx_std:to_boolean((First_char /= 36 andalso First_char /= 42)) of
+    true -> 
+        gen_tcp:send(Client, unicode:characters_to_binary(Clean_line ++ "\n"));
+    _ ->
+        ok
+end;
+    _ ->
+        ok
+end;
+    _ ->
+        ok
+end
+end, Lines)
+    catch
+        throw:{'__clx_return', ReturnValue} -> 
+        ReturnValue
+    end.
+
+recv_all_redis(Db,Current_str) ->
+    try
+        Lines = string:split(Current_str, "\r\n", all),
+    Current_lines_count = erlang:length(Lines),
+    case clx_std:to_boolean(Current_lines_count < 2) of
+    true -> 
+        Recv_res = gen_tcp:recv(Db, 0),
+    case clx_std:to_boolean(clx_std:get_element(Recv_res, 1) == ok) of
+    true -> 
+        Chunk = binary_to_list(clx_std:get_element(Recv_res, 2)),
+    throw({'__clx_return', recv_all_redis(Db, Current_str ++ Chunk)});
+    _ ->
+        throw({'__clx_return', Current_str})
+end;
+    _ ->
+        First_line = clx_std:get_element(Lines, 1),
+    Raw_count = lists:nthtail(1, First_line),
+    Expected_count = list_to_integer(Raw_count),
+    Expected_lines_count = Expected_count + Expected_count + 2,
+    case clx_std:to_boolean(Current_lines_count < Expected_lines_count) of
+    true -> 
+        Recv_res = gen_tcp:recv(Db, 0),
+    case clx_std:to_boolean(clx_std:get_element(Recv_res, 1) == ok) of
+    true -> 
+        Chunk = binary_to_list(clx_std:get_element(Recv_res, 2)),
+    throw({'__clx_return', recv_all_redis(Db, Current_str ++ Chunk)});
+    _ ->
+        throw({'__clx_return', Current_str})
+end;
+    _ ->
+        throw({'__clx_return', Current_str})
+end
 end
     catch
         throw:{'__clx_return', ReturnValue} -> 
